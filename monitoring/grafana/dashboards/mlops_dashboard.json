@@ -1,0 +1,41 @@
+{
+  "title": "Drift-Aware MLOps Dashboard",
+  "tags": ["mlops"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Current Model Version",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "current_model_version", "refId": "A"}],
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto"}
+    },
+    {
+      "type": "stat",
+      "title": "Drift Severity",
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "drift_severity", "refId": "A"}],
+      "options": {"colorMode": "value", "graphMode": "area"}
+    },
+    {
+      "type": "stat",
+      "title": "Retrain Events",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "retrain_events_total", "refId": "A"}],
+      "options": {"colorMode": "value", "graphMode": "area"}
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction Requests Rate",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(prediction_requests_total[1m])", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Prediction Latency (Seconds)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 12},
+      "targets": [{"expr": "rate(prediction_latency_seconds_sum[1m]) / rate(prediction_latency_seconds_count[1m])", "refId": "A"}]
+    }
+  ]
+}

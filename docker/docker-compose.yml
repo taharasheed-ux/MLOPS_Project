@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # ── Inference API ──────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mlops_api
+    ports:
+      - "8080:8000"
+    volumes:
+      # Mount paths as absolute path or relative to project root
+      # to ensure models and configs sync with the host
+      - ../configs:/app/configs:ro
+      - ../models:/app/models:ro
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    networks:
+      - mlops_net
+
+  # ── Prometheus ───────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mlops_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+    networks:
+      - mlops_net
+
+  # ── Grafana ──────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mlops_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    # Optional: Mount pre-configured dashboards later in Phase 7
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - mlops_net
+
+  # ── MLflow Tracking Server ───────────────────────
+  mlflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mlflow
+    container_name: mlops_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../mlruns:/mlruns
+    restart: unless-stopped
+    networks:
+      - mlops_net
+
+networks:
+  mlops_net:
+    driver: bridge

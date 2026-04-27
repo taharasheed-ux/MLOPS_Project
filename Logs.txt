@@ -266,3 +266,32 @@ marital-status categorical chi_square   5.209337 5.172582e-01       1.000000e+00
           race categorical chi_square   1.694003 7.918067e-01       1.000000e+00     0.014552       False      none
            sex categorical chi_square   0.538363 4.631121e-01       1.000000e+00     0.016407       False      none
 native-country categorical chi_square  48.038852 1.792527e-01       1.000000e+00     0.024505       False      none
+
+
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m pytest tests/test_policy_engine.py -v
+======================================================= test session starts =======================================================
+platform linux -- Python 3.12.3, pytest-8.3.5, pluggy-1.6.0 -- /home/tahar/MLOPS_Project/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/tahar/MLOPS_Project
+plugins: anyio-4.13.0
+collected 6 items                                                                                                                 
+
+tests/test_policy_engine.py::test_engine_initialization PASSED                                                              [ 16%] 
+tests/test_policy_engine.py::test_all_conditions_met PASSED                                                                 [ 33%] 
+tests/test_policy_engine.py::test_severity_not_met PASSED                                                                   [ 50%] 
+tests/test_policy_engine.py::test_samples_not_met PASSED                                                                    [ 66%] 
+tests/test_policy_engine.py::test_cooldown_not_met PASSED                                                                   [ 83%] 
+tests/test_policy_engine.py::test_state_management PASSED
+
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m pytest tests/test_api.py -v
+===================== test session starts =====================
+platform linux -- Python 3.12.3, pytest-8.3.5, pluggy-1.6.0 -- /home/tahar/MLOPS_Project/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/tahar/MLOPS_Project
+plugins: anyio-4.13.0
+collected 4 items                                             
+
+tests/test_api.py::test_health_check PASSED             [ 25%]
+tests/test_api.py::test_metrics_endpoint PASSED         [ 50%]
+tests/test_api.py::test_predict_endpoint PASSED         [ 75%]
+tests/test_api.py::test_predict_endpoint_missing_fields PASSED [100%]
