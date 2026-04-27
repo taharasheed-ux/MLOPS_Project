@@ -295,3 +295,13 @@ tests/test_api.py::test_health_check PASSED             [ 25%]
 tests/test_api.py::test_metrics_endpoint PASSED         [ 50%]
 tests/test_api.py::test_predict_endpoint PASSED         [ 75%]
 tests/test_api.py::test_predict_endpoint_missing_fields PASSED [100%]
+
+(venv) tahar@Tahasvictus:~/MLOPS_Project/docker$ docker-compose up -d
+WARN[0000] /home/tahar/MLOPS_Project/docker/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 1/1
+ ✔ Network docker_mlops_net Created                        0.1s
+WARN[0000] Found orphan containers ([docker-alertmanager-1 docker-fraud-api-1]) for this project. If you removed or renamed th[+] up 4/4 in your compose file, you can run this command with 
+ ✔ Network docker_mlops_net   Created                      0.1s
+ ✔ Container mlops_api        Created                      0.2s
+ ✔ Container mlops_prometheus Created                      0.3s
+ ✔ Container mlops_grafana    Created 
