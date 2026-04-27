@@ -177,3 +177,92 @@ tests/test_training.py::TestFullPipeline::test_pipeline_no_mlflow
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ===================================================== 9 passed, 4 warnings in 1.21s =====================================================
+============================================================
+Batch: batch_1
+       feature        type       test  statistic  p_value  p_value_corrected  effect_size  is_drifted magnitude
+           age   numerical    ks_test   0.023096 0.261914           1.000000     0.023096       False      none
+        fnlwgt   numerical    ks_test   0.020901 0.376056           1.000000     0.020901       False      none
+ education-num   numerical    ks_test   0.024572 0.200803           1.000000     0.024572       False      none
+  capital-gain   numerical    ks_test   0.005620 1.000000           1.000000     0.005620       False      none
+  capital-loss   numerical    ks_test   0.004446 1.000000           1.000000     0.004446       False      none
+hours-per-week   numerical    ks_test   0.014631 0.807779           1.000000     0.014631       False      none
+     workclass categorical chi_square   6.550074 0.477177           1.000000     0.021630       False      none
+     education categorical chi_square  27.053651 0.028302           0.396232     0.030030       False      none
+marital-status categorical chi_square   2.003260 0.919399           1.000000     0.012920       False      none
+    occupation categorical chi_square  19.606276 0.105472           1.000000     0.027461       False      none
+  relationship categorical chi_square   6.340151 0.274513           1.000000     0.025180       False      none
+          race categorical chi_square   4.258851 0.372106           1.000000     0.023073       False      none
+           sex categorical chi_square   1.851648 0.173592           1.000000     0.030427       False      none
+native-country categorical chi_square  48.307360 0.172399           1.000000     0.024573       False      none
+
+============================================================
+Batch: batch_2
+       feature        type       test  statistic      p_value  p_value_corrected  effect_size  is_drifted magnitude
+           age   numerical    ks_test   0.130356 1.902305e-28       2.663227e-27     0.130356        True       low
+        fnlwgt   numerical    ks_test   0.023444 2.463947e-01       1.000000e+00     0.023444       False      none
+ education-num   numerical    ks_test   0.014850 7.932614e-01       1.000000e+00     0.014850       False      none
+  capital-gain   numerical    ks_test   0.005497 1.000000e+00       1.000000e+00     0.005497       False      none
+  capital-loss   numerical    ks_test   0.009253 9.965434e-01       1.000000e+00     0.009253       False      none
+hours-per-week   numerical    ks_test   0.475083 0.000000e+00       0.000000e+00     0.475083        True      high
+     workclass categorical chi_square   7.338369 3.945191e-01       1.000000e+00     0.022895       False      none
+     education categorical chi_square  10.536945 7.846760e-01       1.000000e+00     0.018741       False      none
+marital-status categorical chi_square   3.863843 6.950960e-01       1.000000e+00     0.017944       False      none
+    occupation categorical chi_square   9.773578 7.123366e-01       1.000000e+00     0.019388       False      none
+  relationship categorical chi_square   6.563402 2.551870e-01       1.000000e+00     0.025619       False      none
+          race categorical chi_square   1.351199 8.526310e-01       1.000000e+00     0.012996       False      none
+           sex categorical chi_square   0.869249 3.511633e-01       1.000000e+00     0.020848       False      none
+native-country categorical chi_square  47.624950 1.901994e-01       1.000000e+00     0.024399       False      none
+
+============================================================
+Batch: batch_3
+       feature        type       test  statistic       p_value  p_value_corrected  effect_size  is_drifted magnitude
+           age   numerical    ks_test   0.286217 1.820371e-137      2.548519e-136     0.286217        True    medium
+        fnlwgt   numerical    ks_test   0.013652  8.680446e-01       1.000000e+00     0.013652       False      none
+ education-num   numerical    ks_test   0.013507  8.761949e-01       1.000000e+00     0.013507       False      none
+  capital-gain   numerical    ks_test   0.026269  1.448701e-01       1.000000e+00     0.026269       False      none
+  capital-loss   numerical    ks_test   0.005278  1.000000e+00       1.000000e+00     0.005278       False      none
+hours-per-week   numerical    ks_test   0.024208  2.147653e-01       1.000000e+00     0.024208       False      none
+     workclass categorical chi_square   7.013100  4.275172e-01       1.000000e+00     0.022382       False      none
+     education categorical chi_square 756.865549 1.383669e-151      1.937137e-150     0.158836        True       low
+marital-status categorical chi_square   6.777066  3.419571e-01       1.000000e+00     0.023765       False      none
+    occupation categorical chi_square  18.158683  1.515868e-01       1.000000e+00     0.026427       False      none
+  relationship categorical chi_square   4.235524  5.160283e-01       1.000000e+00     0.020580       False      none
+          race categorical chi_square   8.740760  6.791617e-02       9.508264e-01     0.033054       False      none
+           sex categorical chi_square   2.710515  9.968881e-02       1.000000e+00     0.036814       False      none
+native-country categorical chi_square  45.128379  2.661788e-01       1.000000e+00     0.023751       False      none
+
+============================================================
+Batch: batch_4
+       feature        type       test  statistic  p_value  p_value_corrected  effect_size  is_drifted magnitude
+           age   numerical    ks_test   0.018646 0.521198           1.000000     0.018646       False      none
+        fnlwgt   numerical    ks_test   0.016070 0.707542           1.000000     0.016070       False      none
+ education-num   numerical    ks_test   0.010507 0.983840           1.000000     0.010507       False      none
+  capital-gain   numerical    ks_test   0.006778 0.999992           1.000000     0.006778       False      none
+  capital-loss   numerical    ks_test   0.002781 1.000000           1.000000     0.002781       False      none
+hours-per-week   numerical    ks_test   0.031955 0.041322           0.578503     0.031955       False      none
+     workclass categorical chi_square   4.647938 0.702838           1.000000     0.018221       False      none
+     education categorical chi_square  17.098001 0.313040           1.000000     0.023873       False      none
+marital-status categorical chi_square  27.813141 0.000102           0.001426     0.048143       False      none
+    occupation categorical chi_square   6.678424 0.917955           1.000000     0.016027       False      none
+  relationship categorical chi_square  10.552543 0.061010           0.854141     0.032485       False      none
+          race categorical chi_square   1.647537 0.800224           1.000000     0.014351       False      none
+           sex categorical chi_square   2.119809 0.145405           1.000000     0.032556       False      none
+native-country categorical chi_square  45.074872 0.267993           1.000000     0.023737       False      none
+
+============================================================
+Batch: batch_5
+       feature        type       test  statistic      p_value  p_value_corrected  effect_size  is_drifted magnitude
+           age   numerical    ks_test   0.226700 8.524107e-86       1.193375e-84     0.226700        True    medium
+        fnlwgt   numerical    ks_test   0.012435 9.284891e-01       1.000000e+00     0.012435       False      none
+ education-num   numerical    ks_test   0.013719 8.642181e-01       1.000000e+00     0.013719       False      none
+  capital-gain   numerical    ks_test   0.459018 0.000000e+00       0.000000e+00     0.459018        True      high
+  capital-loss   numerical    ks_test   0.486592 0.000000e+00       0.000000e+00     0.486592        True      high
+hours-per-week   numerical    ks_test   0.489083 0.000000e+00       0.000000e+00     0.489083        True      high
+     workclass categorical chi_square  10.476363 1.631467e-01       1.000000e+00     0.027355       False      none
+     education categorical chi_square  17.814562 2.725401e-01       1.000000e+00     0.024368       False      none
+marital-status categorical chi_square   5.209337 5.172582e-01       1.000000e+00     0.020835       False      none
+    occupation categorical chi_square  18.871972 1.271270e-01       1.000000e+00     0.026942       False      none
+  relationship categorical chi_square   2.914245 7.132048e-01       1.000000e+00     0.017071       False      none
+          race categorical chi_square   1.694003 7.918067e-01       1.000000e+00     0.014552       False      none
+           sex categorical chi_square   0.538363 4.631121e-01       1.000000e+00     0.016407       False      none
+native-country categorical chi_square  48.038852 1.792527e-01       1.000000e+00     0.024505       False      none
