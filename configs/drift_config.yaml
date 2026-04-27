@@ -1,0 +1,96 @@
+# ============================================================
+# Drift Simulation Configuration
+# ============================================================
+# Each batch defines perturbations applied to the test data
+# to simulate realistic distribution shifts over time.
+#
+# Perturbation types:
+#   - covariate_shift: modify feature distributions
+#   - conditional_shift: flip labels for specific subgroups
+#   - feature_importance_shift: add noise to key predictive features
+# ============================================================
+
+# Number of samples per evaluation batch
+batch_size: 2000
+
+batches:
+  # --- Batch 1: Baseline (no perturbation) ---
+  batch_1:
+    description: "Clean baseline batch - no drift applied"
+    perturbations: {}
+
+  # --- Batch 2: Mild covariate shift ---
+  batch_2:
+    description: "Mild covariate shift on age and hours-per-week"
+    perturbations:
+      covariate_shift:
+        age:
+          method: "shift"
+          value: 5            # Add 5 years to age
+        hours-per-week:
+          method: "shift"
+          value: 3            # Add 3 hours
+
+  # --- Batch 3: Stronger covariate shift ---
+  batch_3:
+    description: "Stronger covariate shift on age + education resampling"
+    perturbations:
+      covariate_shift:
+        age:
+          method: "shift"
+          value: 10           # Add 10 years to age
+        education:
+          method: "resample"  # Resample education distribution
+          target_distribution:
+            "Bachelors": 0.35
+            "HS-grad": 0.25
+            "Some-college": 0.20
+            "Masters": 0.10
+            "Other": 0.10     # All remaining categories
+        capital-gain:
+          method: "scale"
+          value: 1.5          # Scale capital-gain by 1.5x
+
+  # --- Batch 4: Conditional shift (label relationships change) ---
+  batch_4:
+    description: "Conditional shift - flip labels for specific subgroups"
+    perturbations:
+      conditional_shift:
+        # Flip labels for young highly-educated individuals
+        - condition:
+            feature: "education-num"
+            operator: ">="
+            value: 13           # Bachelor's degree or higher
+          flip_probability: 0.15
+        # Flip labels for high capital-gain earners
+        - condition:
+            feature: "capital-gain"
+            operator: ">"
+            value: 5000
+          flip_probability: 0.20
+
+  # --- Batch 5: Mixed drift scenario ---
+  batch_5:
+    description: "Mixed drift - covariate + conditional + feature importance"
+    perturbations:
+      covariate_shift:
+        age:
+          method: "shift"
+          value: 8
+        hours-per-week:
+          method: "shift"
+          value: 5
+      conditional_shift:
+        - condition:
+            feature: "education-num"
+            operator: ">="
+            value: 13
+          flip_probability: 0.10
+      feature_importance_shift:
+        # Add Gaussian noise to key predictive features
+        capital-gain:
+          noise_std_factor: 0.5   # noise_std = factor * feature_std
+        capital-loss:
+          noise_std_factor: 0.3
+        age:
+          noise_std_factor: 0.2

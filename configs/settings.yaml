@@ -1,0 +1,84 @@
+# ============================================================
+# Project-wide settings for Drift-Aware MLOps Pipeline
+# ============================================================
+
+project:
+  name: "drift-aware-mlops"
+  random_seed: 42
+  log_level: "INFO"
+
+# --- Paths ---
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  batch_data_dir: "data/batches"
+  models_dir: "models"
+  reports_dir: "reports"
+  figures_dir: "reports/figures"
+  logs_dir: "logs"
+
+# --- Data ---
+data:
+  # Original UCI file names (user places these in data/raw/)
+  train_filename: "adult.data"
+  test_filename: "adult.test"
+  target_column: "income"
+  # Positive label (after stripping whitespace)
+  positive_label: ">50K"
+  test_size: 0.3
+  # Column names for the UCI Adult dataset
+  column_names:
+    - "age"
+    - "workclass"
+    - "fnlwgt"
+    - "education"
+    - "education-num"
+    - "marital-status"
+    - "occupation"
+    - "relationship"
+    - "race"
+    - "sex"
+    - "capital-gain"
+    - "capital-loss"
+    - "hours-per-week"
+    - "native-country"
+    - "income"
+  numerical_features:
+    - "age"
+    - "fnlwgt"
+    - "education-num"
+    - "capital-gain"
+    - "capital-loss"
+    - "hours-per-week"
+  categorical_features:
+    - "workclass"
+    - "education"
+    - "marital-status"
+    - "occupation"
+    - "relationship"
+    - "race"
+    - "sex"
+    - "native-country"
+
+# --- Model ---
+model:
+  type: "xgboost"
+  params:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    eval_metric: "logloss"
+    use_label_encoder: false
+    random_state: 42
+
+# --- MLflow ---
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "drift-aware-pipeline"
+
+# --- API ---
+api:
+  host: "0.0.0.0"
+  port: 8000

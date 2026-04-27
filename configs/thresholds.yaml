@@ -1,0 +1,31 @@
+# ============================================================
+# Drift Detection Thresholds & Retraining Policy Parameters
+# ============================================================
+
+drift_detection:
+  # Significance level for statistical tests (before correction)
+  alpha: 0.05
+  # Correction method: "bonferroni" or "benjamini-hochberg"
+  correction_method: "bonferroni"
+  # Minimum effect size to consider drift meaningful
+  min_effect_size:
+    numerical: 0.1    # KS statistic threshold
+    categorical: 0.1  # Cramér's V threshold
+
+# Global drift severity scoring
+severity:
+  # How to weight features in severity calculation
+  weighting: "uniform"  # "uniform" or "importance_weighted"
+  # Severity threshold to raise a drift event
+  threshold: 0.3
+  # Alternative thresholds for sensitivity experiments
+  sensitivity_thresholds: [0.1, 0.2, 0.3, 0.4, 0.5]
+
+# Retraining policy parameters
+retraining_policy:
+  # Minimum drift severity to consider retraining
+  severity_threshold: 0.3
+  # Minimum number of new labeled samples required
+  min_new_samples: 500
+  # Cooldown period: minimum batches between retrains
+  cooldown_batches: 1
