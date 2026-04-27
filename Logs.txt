@@ -1,0 +1,179 @@
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m src.data_processing
+2026-04-27 12:35:35 | data_processing | INFO    | ============================================================
+2026-04-27 12:35:35 | data_processing | INFO    | Starting data processing pipeline
+2026-04-27 12:35:35 | data_processing | INFO    | ============================================================
+2026-04-27 12:35:35 | data_processing | INFO    | Loading training data from /home/tahar/MLOPS_Project/data/raw/adult.data
+2026-04-27 12:35:36 | data_processing | INFO    |   Loaded 32561 rows from adult.data
+2026-04-27 12:35:36 | data_processing | INFO    | Loading test data from /home/tahar/MLOPS_Project/data/raw/adult.test
+2026-04-27 12:35:36 | data_processing | INFO    |   Loaded 16281 rows from adult.test
+2026-04-27 12:35:36 | data_processing | INFO    | Combined dataset: 48842 rows
+2026-04-27 12:35:36 | data_processing | INFO    | Loaded 48842 rows, 15 columns
+2026-04-27 12:35:36 | data_processing | INFO    | Cleaning data...
+/home/tahar/MLOPS_Project/src/data_processing.py:165: FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+The behavior will change in pandas 3.0. This inplace method will never work because the intermediate object on which we are setting values always behaves as a copy.
+
+For example, when doing 'df[col].method(value, inplace=True)', try using 'df.method({col: value}, inplace=True)' or df[col] = df[col].method(value) instead, to perform the operation inplace on the original object.
+
+
+  df[col].fillna(mode_val, inplace=True)
+  df[col].fillna(mode_val, inplace=True)
+2026-04-27 12:35:36 | data_processing | INFO    |   Imputed workclass with mode: Private
+2026-04-27 12:35:36 | data_processing | INFO    |   Imputed occupation with mode: Prof-specialty
+2026-04-27 12:35:36 | data_processing | INFO    |   Imputed native-country with mode: United-States
+2026-04-27 12:35:36 | data_processing | INFO    |   Dropped 53 duplicate rows
+2026-04-27 12:35:36 | data_processing | INFO    | Cleaning complete: 48789 rows, 0 NaN remaining
+2026-04-27 12:35:36 | data_processing | INFO    | Splitting data: test_size=0.3, seed=42
+2026-04-27 12:35:36 | data_processing | INFO    | Train: 34152 rows | Test: 14637 rows
+2026-04-27 12:35:36 | data_processing | INFO    | Saved processed data: /home/tahar/MLOPS_Project/data/processed/train.csv, /home/tahar/MLOPS_Project/data/processed/test.csv
+2026-04-27 12:35:36 | data_processing | INFO    | Data pipeline complete!
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m src.drift_simulation
+2026-04-27 12:36:09 | drift_simulation | INFO    | ============================================================
+2026-04-27 12:36:09 | drift_simulation | INFO    | Starting drift simulation
+2026-04-27 12:36:09 | drift_simulation | INFO    | ============================================================
+2026-04-27 12:36:09 | drift_simulation | INFO    | Loaded test data: 14637 rows
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generating batch_1: Clean baseline batch - no drift applied
+2026-04-27 12:36:09 | drift_simulation | INFO    |   batch_1: 2000 rows generated
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generating batch_2: Mild covariate shift on age and hours-per-week
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate shift: age += 5
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate shift: hours-per-week += 3
+2026-04-27 12:36:09 | drift_simulation | INFO    |   batch_2: 2000 rows generated
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generating batch_3: Stronger covariate shift on age + education resampling
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate shift: age += 10
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Resampled education to target distribution
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate scale: capital-gain *= 1.5
+2026-04-27 12:36:09 | drift_simulation | INFO    |   batch_3: 2000 rows generated
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generating batch_4: Conditional shift - flip labels for specific subgroups
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Conditional shift: flipped 74/494 labels where education-num >= 13
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Conditional shift: flipped 20/100 labels where capital-gain > 5000
+2026-04-27 12:36:09 | drift_simulation | INFO    |   batch_4: 2000 rows generated
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generating batch_5: Mixed drift - covariate + conditional + feature importance        
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate shift: age += 8
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Covariate shift: hours-per-week += 5
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Conditional shift: flipped 51/510 labels where education-num >= 13
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Importance shift: capital-gain += N(0, 0.50 * 6487.12)
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Importance shift: capital-loss += N(0, 0.30 * 422.80)
+2026-04-27 12:36:09 | drift_simulation | INFO    |   Importance shift: age += N(0, 0.20 * 13.56)
+2026-04-27 12:36:09 | drift_simulation | INFO    |   batch_5: 2000 rows generated
+2026-04-27 12:36:09 | drift_simulation | INFO    | Saved batch_1 → /home/tahar/MLOPS_Project/data/batches/batch_1.csv
+2026-04-27 12:36:09 | drift_simulation | INFO    | Saved batch_2 → /home/tahar/MLOPS_Project/data/batches/batch_2.csv
+2026-04-27 12:36:09 | drift_simulation | INFO    | Saved batch_3 → /home/tahar/MLOPS_Project/data/batches/batch_3.csv
+2026-04-27 12:36:09 | drift_simulation | INFO    | Saved batch_4 → /home/tahar/MLOPS_Project/data/batches/batch_4.csv
+2026-04-27 12:36:09 | drift_simulation | INFO    | Saved batch_5 → /home/tahar/MLOPS_Project/data/batches/batch_5.csv
+2026-04-27 12:36:09 | drift_simulation | INFO    | Generated 5 evaluation batches
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m pytest tests/test_data_pipeline.py -v
+========================================================== test session starts ==========================================================
+platform linux -- Python 3.12.3, pytest-8.3.5, pluggy-1.6.0 -- /home/tahar/MLOPS_Project/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/tahar/MLOPS_Project
+plugins: anyio-4.13.0
+collected 19 items                                                                                                                      
+
+tests/test_data_pipeline.py::TestDataLoading::test_load_returns_dataframe PASSED                                                  [  5%]
+tests/test_data_pipeline.py::TestDataLoading::test_load_row_count PASSED                                                          [ 10%]
+tests/test_data_pipeline.py::TestDataLoading::test_load_column_count PASSED                                                       [ 15%] 
+tests/test_data_pipeline.py::TestDataLoading::test_target_column_exists PASSED                                                    [ 21%] 
+tests/test_data_pipeline.py::TestDataCleaning::test_no_nan_after_cleaning PASSED                                                  [ 26%]
+tests/test_data_pipeline.py::TestDataCleaning::test_no_question_marks PASSED                                                      [ 31%] 
+tests/test_data_pipeline.py::TestDataCleaning::test_target_has_two_classes PASSED                                                 [ 36%] 
+tests/test_data_pipeline.py::TestDataSplitting::test_split_sizes PASSED                                                           [ 42%]
+tests/test_data_pipeline.py::TestDataSplitting::test_no_overlap PASSED                                                            [ 47%] 
+tests/test_data_pipeline.py::TestDataSplitting::test_stratification PASSED                                                        [ 52%] 
+tests/test_data_pipeline.py::TestFeatureEncoding::test_fit_transform PASSED                                                       [ 57%]
+tests/test_data_pipeline.py::TestFeatureEncoding::test_transform_consistency PASSED                                               [ 63%]
+tests/test_data_pipeline.py::TestFeatureEncoding::test_save_load_roundtrip PASSED                                                 [ 68%]
+tests/test_data_pipeline.py::TestFeatureEncoding::test_unknown_categories_handled PASSED                                          [ 73%] 
+tests/test_data_pipeline.py::TestDriftSimulation::test_generates_five_batches PASSED                                              [ 78%]
+tests/test_data_pipeline.py::TestDriftSimulation::test_batch_sizes PASSED                                                         [ 84%]
+tests/test_data_pipeline.py::TestDriftSimulation::test_batch_1_no_drift PASSED                                                    [ 89%]
+tests/test_data_pipeline.py::TestDriftSimulation::test_covariate_shift_applied PASSED                                             [ 94%]
+tests/test_data_pipeline.py::TestDriftSimulation::test_save_batches PASSED                                                        [100%]
+
+=========================================================== warnings summary ============================================================
+tests/test_data_pipeline.py::TestDataCleaning::test_no_nan_after_cleaning
+  /home/tahar/MLOPS_Project/src/data_processing.py:165: FutureWarning: A value is trying to be set on a copy of a DataFrame or Series through chained assignment using an inplace method.
+  The behavior will change in pandas 3.0. This inplace method will never work because the intermediate object on which we are setting values always behaves as a copy.
+
+  For example, when doing 'df[col].method(value, inplace=True)', try using 'df.method({col: value}, inplace=True)' or df[col] = df[col].method(value) instead, to perform the operation inplace on the original object.
+
+
+    df[col].fillna(mode_val, inplace=True)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m src.train --no-mlflow
+2026-04-27 12:51:43 | train        | INFO    | ============================================================
+2026-04-27 12:51:43 | train        | INFO    | Starting training pipeline: baseline_training
+2026-04-27 12:51:43 | train        | INFO    | ============================================================
+2026-04-27 12:51:43 | train        | INFO    | Loaded processed data: train=34152, test=14637
+2026-04-27 12:51:43 | feature_encoding | INFO    | Fitting encoders on training data...
+2026-04-27 12:51:43 | feature_encoding | INFO    |   OrdinalEncoder fitted on 8 categorical features
+2026-04-27 12:51:43 | feature_encoding | INFO    |   LabelEncoder fitted: classes = ['<=50K', '>50K']
+2026-04-27 12:51:43 | feature_encoding | INFO    | Transformed 34152 rows to numeric format
+2026-04-27 12:51:43 | feature_encoding | INFO    | Transformed 14637 rows to numeric format
+2026-04-27 12:51:43 | train        | INFO    | Features: 14, Train: 34152, Test: 14637
+2026-04-27 12:51:43 | train        | INFO    | Training XGBoost with params: {'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.1, 'subsample': 0.8, 'colsample_bytree': 0.8, 'eval_metric': 'logloss', 'use_label_encoder': False, 'random_state': 42}
+/home/tahar/MLOPS_Project/venv/lib/python3.12/site-packages/xgboost/core.py:158: UserWarning: [12:51:43] WARNING: /workspace/src/learner.cc:740:
+Parameters: { "use_label_encoder" } are not used.
+
+  warnings.warn(smsg, UserWarning)
+2026-04-27 12:51:44 | train        | INFO    | Training completed in 1.00s
+2026-04-27 12:51:44 | evaluate     | INFO    | Metrics [test]: acc=0.8744, f1=0.7182, prec=0.7754, rec=0.6689
+2026-04-27 12:51:44 | evaluate     | INFO    | Metrics [eval]: acc=0.8744, f1=0.7182, prec=0.7754, rec=0.6689
+2026-04-27 12:51:44 | evaluate     | INFO    |
+              precision    recall  f1-score   support
+
+       <=50K       0.90      0.94      0.92     11133
+        >50K       0.78      0.67      0.72      3504
+
+    accuracy                           0.87     14637
+   macro avg       0.84      0.80      0.82     14637
+weighted avg       0.87      0.87      0.87     14637
+
+2026-04-27 12:51:44 | evaluate     | INFO    | Confusion matrix:
+[[10454   679]
+ [ 1160  2344]]
+2026-04-27 12:51:44 | train        | INFO    | Saved model to /home/tahar/MLOPS_Project/models/xgb_model_v1.pkl
+2026-04-27 12:51:44 | feature_encoding | INFO    | Saved encoder pipeline to /home/tahar/MLOPS_Project/models/encoder_pipeline.pkl       
+2026-04-27 12:51:44 | train        | INFO    | MLflow logging disabled for this run
+2026-04-27 12:51:44 | train        | INFO    | ============================================================
+2026-04-27 12:51:44 | train        | INFO    | Training pipeline complete!
+2026-04-27 12:51:44 | train        | INFO    |   Model: /home/tahar/MLOPS_Project/models/xgb_model_v1.pkl
+2026-04-27 12:51:44 | train        | INFO    |   Test Accuracy: 0.8744
+2026-04-27 12:51:44 | train        | INFO    |   Test F1: 0.7182
+2026-04-27 12:51:44 | train        | INFO    | ============================================================
+(venv) tahar@Tahasvictus:~/MLOPS_Project$ python -m pytest tests/test_training.py -v
+========================================================== test session starts ==========================================================
+platform linux -- Python 3.12.3, pytest-8.3.5, pluggy-1.6.0 -- /home/tahar/MLOPS_Project/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/tahar/MLOPS_Project
+plugins: anyio-4.13.0
+collected 9 items                                                                                                                       
+
+tests/test_training.py::TestTraining::test_model_trains PASSED                                                                    [ 11%]
+tests/test_training.py::TestTraining::test_model_predicts PASSED                                                                  [ 22%]
+tests/test_training.py::TestTraining::test_model_accuracy_reasonable PASSED                                                       [ 33%]
+tests/test_training.py::TestTraining::test_model_f1_reasonable PASSED                                                             [ 44%] 
+tests/test_training.py::TestEvaluation::test_compute_metrics_keys PASSED                                                          [ 55%] 
+tests/test_training.py::TestEvaluation::test_metrics_values_range PASSED                                                          [ 66%] 
+tests/test_training.py::TestEvaluation::test_metrics_to_dataframe PASSED                                                          [ 77%]
+tests/test_training.py::TestModelPersistence::test_save_load_roundtrip PASSED                                                     [ 88%]
+tests/test_training.py::TestFullPipeline::test_pipeline_no_mlflow PASSED                                                          [100%]
+
+=========================================================== warnings summary ============================================================
+tests/test_training.py::TestTraining::test_model_trains
+  /home/tahar/MLOPS_Project/venv/lib/python3.12/site-packages/mlflow/utils/pydantic_utils.py:33: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    return pydantic_model_validator(mode=mode)(func)
+
+tests/test_training.py::TestTraining::test_model_trains
+  /home/tahar/MLOPS_Project/venv/lib/python3.12/site-packages/mlflow/gateway/config.py:445: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Route(ConfigModel):
+
+tests/test_training.py::TestTraining::test_model_trains
+tests/test_training.py::TestFullPipeline::test_pipeline_no_mlflow
+  /home/tahar/MLOPS_Project/venv/lib/python3.12/site-packages/xgboost/core.py:158: UserWarning: [12:52:16] WARNING: /workspace/src/learner.cc:740:
+  Parameters: { "use_label_encoder" } are not used.
+
+    warnings.warn(smsg, UserWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+===================================================== 9 passed, 4 warnings in 1.21s =====================================================

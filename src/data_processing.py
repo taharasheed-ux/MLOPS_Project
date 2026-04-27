@@ -162,13 +162,13 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     for col in categorical:
         if col in df.columns and df[col].isna().any():
             mode_val = df[col].mode()[0]
-            df[col].fillna(mode_val, inplace=True)
+            df[col] = df[col].fillna(mode_val)
             logger.info(f"  Imputed {col} with mode: {mode_val}")
 
     for col in numerical:
         if col in df.columns and df[col].isna().any():
             median_val = df[col].median()
-            df[col].fillna(median_val, inplace=True)
+            df[col] = df[col].fillna(median_val)
             logger.info(f"  Imputed {col} with median: {median_val}")
 
     # Drop duplicates
