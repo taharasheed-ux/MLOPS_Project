@@ -168,3 +168,32 @@ def metrics_to_dataframe(batch_metrics: dict[str, dict]) -> pd.DataFrame:
     # Reorder columns
     cols = ["batch", "accuracy", "f1", "precision", "recall"]
     return df[[c for c in cols if c in df.columns]]
+
+
+def extract_core_metrics(metrics: dict, prefix: str = "") -> dict[str, float]:
+    """Return the standard classification metrics without their storage prefix."""
+    return {
+        "accuracy": metrics[f"{prefix}accuracy"],
+        "f1": metrics[f"{prefix}f1"],
+        "precision": metrics[f"{prefix}precision"],
+        "recall": metrics[f"{prefix}recall"],
+    }
+
+
+def compute_metric_drops(
+    baseline_metrics: dict[str, float],
+    current_metrics: dict[str, float],
+) -> dict[str, float]:
+    """
+    Compute non-negative performance drops between baseline and current metrics.
+
+    Positive values indicate degradation.
+    """
+    drops = {}
+    for metric_name in ("accuracy", "f1", "precision", "recall"):
+        baseline = baseline_metrics.get(metric_name)
+        current = current_metrics.get(metric_name)
+        if baseline is None or current is None:
+            continue
+        drops[f"{metric_name}_drop"] = max(0.0, baseline - current)
+    return drops

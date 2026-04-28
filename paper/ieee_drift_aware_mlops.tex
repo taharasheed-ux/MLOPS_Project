@@ -1,0 +1,307 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{balance}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue
+}
+
+\title{A Drift-Aware MLOps Pipeline for Adaptive Retraining on ACS Income Data}
+
+\author{
+\IEEEauthorblockN{Taha Rasheed}
+\IEEEauthorblockA{i222009@nu.edu.pk}
+\and
+\IEEEauthorblockN{Hamza Zahid}
+\IEEEauthorblockA{i221974@nu.edu.pk}
+\and
+\IEEEauthorblockN{Hasnat Noor}
+\IEEEauthorblockA{
+i222049@nu.edu.pk
+}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Modern machine learning systems are often deployed under the assumption that training and inference data are identically distributed. In practice, this assumption fails as populations, behaviors, and feature-target relationships evolve over time. This paper presents a drift-aware MLOps pipeline for tabular income prediction that couples batch drift detection, concept-drift-aware retraining policies, model versioning, and operational monitoring in a single end-to-end system. The implementation uses XGBoost for prediction, Folktables-derived American Community Survey (ACS) data for large-scale experimentation, FastAPI for online inference, MLflow for experiment tracking, and Docker, Prometheus, and Grafana for deployment-time observability. Beyond engineering integration, the paper studies whether adaptive retraining improves performance relative to static deployment under both synthetic and temporal shift. We extend the pipeline with rolling-window retraining, persistent-drift gating, recovery-oriented evaluation metrics, multi-batch concept-drift regimes, and a new multi-year ACS protocol that trains on 2016 data and evaluates on 2017--2018 data. Experimental results show that drift-aware retraining consistently reduces retraining frequency relative to immediate retraining, but static deployment remains the strongest policy on mean F1 in both the single-year and multi-year ACS settings. The main contribution of the work is therefore twofold: a reproducible research-grade drift-aware MLOps framework, and a more credible negative result showing that adaptive retraining is not automatically beneficial even under substantial temporal and simulated drift.
+\end{abstract}
+
+\begin{IEEEkeywords}
+MLOps, dataset shift, concept drift, retraining policy, American Community Survey, XGBoost, MLflow, monitoring
+\end{IEEEkeywords}
+
+\section{Introduction}
+Production machine learning systems are vulnerable to dataset shift. As feature distributions and label relationships change over time, a model that performed well at deployment may silently degrade in production. This makes adaptive maintenance a systems problem rather than a purely modeling problem. Prior work has emphasized the importance of detecting dataset shift and understanding when shift is harmful~\cite{rabanser2019failing}, while the concept-drift literature has shown that not all changes in data distributions imply that retraining is beneficial~\cite{gama2014survey,lu2019learning}.
+
+This paper studies that gap through the design and evaluation of a drift-aware MLOps pipeline for binary income prediction. The implementation follows the production-oriented view of MLOps as an integration of data engineering, model development, deployment, monitoring, and feedback loops~\cite{kreuzberger2023mlops}. It includes data preprocessing, training, drift simulation, drift detection, policy-based retraining, online inference, model tracking, and monitoring, and is then extended into a research framework for testing adaptive retraining strategies under increasingly realistic shift regimes.
+
+We use the ACS Income task provided through Folktables~\cite{ding2021retiring}, which is especially useful because it supports large-scale geographic coverage and multiple survey years. This makes it a stronger basis for studying temporal nonstationarity than the classic Adult dataset alone. The core question is:
+
+\begin{quote}
+\emph{When a production tabular classifier experiences feature drift and performance degradation, does policy-driven retraining outperform static deployment?}
+\end{quote}
+
+The answer is less straightforward. Early single-year ACS experiments showed meaningful drift signals but failed to demonstrate an advantage for adaptive retraining. To determine whether this result reflected weak experimental design or the underlying learning dynamics, the pipeline was strengthened with four methodology upgrades:
+\begin{enumerate}[leftmargin=*]
+    \item rolling-window retraining with a historical anchor sample,
+    \item persistent-drift gating instead of one-shot triggers,
+    \item recovery-oriented evaluation metrics in addition to mean accuracy and mean F1,
+    \item multi-batch concept-drift regimes and a multi-year ACS temporal split.
+\end{enumerate}
+
+The resulting study shows that even under stronger and more realistic temporal variation, adaptive retraining still does not outperform the static baseline on mean F1, although it is more efficient than immediate retraining. This makes the final outcome scientifically useful: the system now supports a defensible negative result rather than an inconclusive one.
+
+The contributions of this paper are:
+\begin{enumerate}[leftmargin=*]
+    \item an end-to-end drift-aware MLOps architecture integrating model training, retraining policy, API serving, experiment tracking, and monitoring;
+    \item a methodology for evaluating adaptive retraining under both simulated and temporal drift on large ACS data;
+    \item an implementation of rolling-window retraining and persistence-aware policy gating;
+    \item an empirical finding that policy-based retraining reduces retraining cost relative to immediate retraining but still fails to surpass static deployment on ACS mean F1.
+\end{enumerate}
+
+\section{Related Work}
+\subsection{Dataset Shift and Concept Drift}
+Dataset shift detection has been studied extensively, especially in settings where silent degradation is dangerous. Rabanser \emph{et al.} show that two-sample testing combined with learned representations can be effective for detecting shift and for distinguishing harmful from benign changes~\cite{rabanser2019failing}. Our work adopts that operational philosophy but keeps the detector intentionally interpretable at the original feature level via statistical testing and effect-size thresholds.
+
+Concept drift research has also emphasized that drift is not a single phenomenon. Gama \emph{et al.} describe concept drift as changes in the relationship between features and the target over time and survey a broad family of adaptation strategies~\cite{gama2014survey}. Lu \emph{et al.} further frame concept-drift learning around detection, understanding, and adaptation, which matches the separation between our detector, policy engine, and retraining module~\cite{lu2019learning}. This distinction is central to our experiments: some batches exhibit covariate shift without severe performance loss, while others are designed to create conditional label instability that should matter to retraining policy.
+
+\subsection{MLOps and Production ML Systems}
+Reliable ML deployment requires more than model accuracy. Sculley \emph{et al.} argue that ML systems accumulate technical debt through data dependencies, configuration issues, feedback loops, and changes in the external world~\cite{sculley2015debt}. Breck \emph{et al.} similarly emphasize testing and monitoring as prerequisites for production readiness~\cite{breck2017mltest}. These ideas motivate the inclusion of CI tests, artifact versioning, monitoring endpoints, and operational dashboards in our implementation. The architecture also aligns with recent MLOps definitions that treat deployment, monitoring, and feedback as first-class lifecycle components~\cite{kreuzberger2023mlops}.
+
+\subsection{Datasets and Base Learner}
+At the data level, Folktables was introduced to move beyond narrow dependence on the UCI Adult dataset and to provide richer census-derived benchmarks spanning tasks, geographies, and years~\cite{ding2021retiring}. This is directly relevant to our study because it enables temporal ACS experiments that are more realistic than single-snapshot perturbation alone.
+
+At the model level, XGBoost remains a strong baseline for large-scale tabular classification because of its accuracy, training efficiency, and practical robustness~\cite{chen2016xgboost}. We use XGBoost not because the paper is about boosting itself, but because a strong and well-understood learner makes the retraining-policy question cleaner: if adaptive retraining fails to help, the explanation is less likely to be a weak base learner and more likely to be the drift-retraining interaction itself.
+
+\section{System Design}
+\subsection{Architecture}
+The system is organized as a modular MLOps pipeline with separate components for data processing, encoding, model training, drift simulation, drift detection, policy evaluation, retraining, API inference, and operational monitoring. The implementation is Python-based and configuration-driven, so the same code path can be executed for Adult, single-year ACS, or multi-year ACS profiles.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/architecture_pipeline.pdf}
+\caption{End-to-end drift-aware MLOps architecture integrating preprocessing, training, drift detection, policy-based retraining, serving, tracking, and monitoring.}
+\label{fig:architecture}
+\end{figure*}
+
+The deployed path works as follows:
+\begin{enumerate}[leftmargin=*]
+    \item preprocess raw Adult or ACS data into train/test artifacts;
+    \item train a baseline XGBoost classifier and serialize the model and encoder;
+    \item expose predictions through FastAPI;
+    \item generate or receive incoming evaluation batches;
+    \item detect feature-level drift and compute batch severity;
+    \item evaluate the retraining policy;
+    \item retrain and version the model when policy conditions are satisfied;
+    \item log model runs with MLflow and export operational metrics to Prometheus and Grafana.
+\end{enumerate}
+
+\subsection{Operational Tooling}
+Although the central question is methodological, the system is intentionally engineered as a research-grade MLOps implementation rather than as a notebook-only experiment. Table~\ref{tab:stack} summarizes the main tools used.
+
+\begin{table}[t]
+\caption{Main implementation components and roles.}
+\label{tab:stack}
+\centering
+\begin{tabular}{p{0.22\linewidth} p{0.7\linewidth}}
+\toprule
+\textbf{Component} & \textbf{Role in the pipeline} \\
+\midrule
+Folktables / ACS & Dataset construction and multi-year census extraction \\
+XGBoost & Baseline tabular classifier and retraining model \\
+FastAPI & Online prediction service and model hot-reload endpoint \\
+MLflow & Experiment tracking and artifact logging \\
+Docker & Reproducible service packaging and local orchestration \\
+Prometheus & Metrics scraping from the inference service \\
+Grafana & Operational dashboards for model-serving observability \\
+Pytest & Regression testing across data, policy, retraining, and API layers \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Data and Experimental Protocol}
+\subsection{Dataset}
+The final experiments are based on the ACS Income task derived from the American Community Survey Public Use Microdata Sample through Folktables~\cite{ding2021retiring}. Compared with Adult, this dataset is larger, more contemporary, and better suited for studying temporal and geographic variation.
+
+Two ACS settings were explored during development:
+\begin{enumerate}[leftmargin=*]
+    \item a single-year 2018 ACS setup with synthetic drift batches;
+    \item a multi-year temporal ACS setup using 2016, 2017, and 2018.
+\end{enumerate}
+
+The final multi-year dataset contains 4{,}803{,}226 rows. To avoid future-data leakage, the preprocessing pipeline uses a temporal split:
+\begin{itemize}[leftmargin=*]
+    \item 2016 rows form the baseline training pool: 1{,}578{,}451 rows,
+    \item 2017--2018 rows form the evaluation pool: 3{,}224{,}775 rows.
+\end{itemize}
+
+Each record includes ten ACS Income features: age, class of worker, education, marital status, occupation, place of birth, relationship, weekly work hours, sex, and race, with binary income label prediction.
+
+\subsection{Preprocessing}
+The ACS preprocessing path was redesigned to support large-scale execution under constrained memory. Instead of loading a national snapshot at once, the pipeline processes one state at a time and, in the multi-year setting, one state-year pair at a time. Shards are written incrementally and combined into final processed outputs. This design makes large ACS runs resumable and reduces peak memory pressure.
+
+For the multi-year path, an additional metadata column (\texttt{DATA\_YEAR}) is attached so that downstream batch generation can preserve temporal provenance.
+
+\subsection{Drift Batches}
+The experimental batches are created from the evaluation pool using a controlled drift simulator. Three perturbation families are supported:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Covariate shift}: numerical shifts or categorical redistribution,
+    \item \textbf{Conditional shift}: subgroup-specific label flips to simulate concept drift,
+    \item \textbf{Feature-importance shift}: additive noise on key numerical features.
+\end{enumerate}
+
+The final ACS protocol uses 12 batches and sustained later-stage drift regimes rather than isolated anomalies. In the multi-year setting, the batch generator first samples from year-specific evaluation slices and then applies synthetic perturbations, allowing real temporal variation and synthetic stress-testing to coexist.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/acs_temporal_timeline.pdf}
+\caption{Twelve-batch multi-year ACS evaluation schedule. Source-year progression and sustained later-stage concept-drift regimes make the final protocol more realistic than a single-year synthetic-only setup.}
+\label{fig:timeline}
+\end{figure*}
+
+\section{Methodology}
+\subsection{Baseline Model}
+The learning model is XGBoost with 200 trees, maximum depth 6, learning rate 0.1, subsampling 0.8, and column subsampling 0.8~\cite{chen2016xgboost}. GPU-backed training is enabled when CUDA is available. Categorical variables are ordinal-encoded, and the encoder is saved as a first-class artifact together with the model.
+
+\subsection{Drift Detection}
+The detector evaluates numerical features with Kolmogorov--Smirnov tests and categorical features with chi-square tests. To limit false alarms from large sample sizes, corrected $p$-values are combined with minimum effect-size thresholds. A batch severity score is then computed from the proportion of drifted features and the magnitude of detected effects.
+
+This choice emphasizes interpretability over maximal detector sophistication. The detector is explicitly designed to answer: \emph{which original features moved, and by how much?}
+
+\subsection{Retraining Policy}
+The retraining policy uses four conditions:
+\begin{enumerate}[leftmargin=*]
+    \item drift severity above threshold,
+    \item sufficient accumulated labeled samples,
+    \item cooldown since last retrain,
+    \item optional concept-drift evidence from labeled performance degradation.
+\end{enumerate}
+
+The final policy adds two important refinements:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{persistent-drift gating}: a trigger must persist across consecutive batches before retraining is allowed;
+    \item \textbf{rolling-window retraining}: retraining uses a bounded window of recent labeled batches plus a 10\% anchor sample from the original training data.
+\end{itemize}
+
+These changes were introduced to reduce reactions to transient noise and to avoid diluting new-regime information with unlimited historical accumulation.
+
+\subsection{Evaluation Strategy}
+Three main policy families are compared:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Static}: never retrain after baseline deployment,
+    \item \textbf{Immediate}: retrain whenever drift or concept drift is detected,
+    \item \textbf{Policy-Standard}: retrain only when policy conditions are met.
+\end{itemize}
+
+Evaluation uses both conventional and recovery-oriented metrics:
+\begin{itemize}[leftmargin=*]
+    \item mean accuracy and mean F1,
+    \item worst-batch accuracy and F1,
+    \item mean and maximum degradation from batch 1,
+    \item cumulative degradation area,
+    \item retraining count and total retraining time,
+    \item mean next-batch F1 recovery after retraining.
+\end{itemize}
+
+The recovery-oriented metrics are important because average accuracy alone can hide whether retraining actually helps after shocks.
+
+\section{Results}
+\subsection{Baseline Temporal Difficulty}
+The multi-year ACS setup is substantially harder than the earlier single-year setup because the baseline model is trained on 2016 and evaluated on later years before any synthetic perturbation is applied. The resulting baseline performance is 0.7964 accuracy and 0.7228 F1, indicating meaningful temporal shift even before adaptive logic is introduced.
+
+\subsection{Policy Comparison}
+Table~\ref{tab:results} summarizes the final multi-year ACS experiment.
+
+\begin{table*}[t]
+\caption{Final multi-year ACS results across policy families.}
+\label{tab:results}
+\centering
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Policy} & \textbf{Mean Acc.} & \textbf{Mean F1} & \textbf{Retrains} & \textbf{Worst Acc.} & \textbf{Worst F1} & \textbf{Concept-Drift Batches} & \textbf{Drift-Alert Batches} & \textbf{Mean Next-Batch F1 Recovery} \\
+\midrule
+Static & 0.7327 & 0.6678 & 0 & 0.6128 & 0.5842 & 5 & 11 & 0.0000 \\
+Immediate & 0.7453 & 0.6627 & 11 & 0.6342 & 0.5551 & 6 & 10 & -0.0190 \\
+Policy-Standard & 0.7424 & 0.6637 & 6 & 0.6320 & 0.5551 & 5 & 11 & -0.0116 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The main observations are:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Static remains best on mean F1.} The strongest mean F1 is 0.6678 under static deployment.
+    \item \textbf{Policy-Standard reduces retraining burden.} It retrains 6 times versus 11 for Immediate.
+    \item \textbf{Adaptive retraining does not produce positive recovery on average.} Mean next-batch F1 recovery is negative for both adaptive policies.
+    \item \textbf{Drift was substantial and persistent.} The final setup produced 11 drift-alert batches and 5 concept-drift batches for the policy run, so the negative result cannot easily be dismissed as ``no real drift.''
+\end{enumerate}
+
+Figure~\ref{fig:performance} shows the main policy comparison curves.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/metrics_comparison.png}
+\caption{Batch-wise performance trajectories for the main policy families under the final ACS setting.}
+\label{fig:performance}
+\end{figure}
+
+\subsection{Interpretation}
+The strongest result of the study is not that adaptive retraining improves mean performance, but that after stronger protocol design it \emph{still does not}. This matters because earlier single-year ACS experiments could be criticized as too synthetic or too weakly shifted. The multi-year setting makes that criticism less convincing by adding real temporal variation before synthetic perturbations are applied.
+
+The data suggest that:
+\begin{itemize}[leftmargin=*]
+    \item the baseline model is robust enough that many shifts do not justify full retraining,
+    \item some retraining datasets may still contain too much transient or mixed-regime signal,
+    \item retraining cost can be reduced substantially with policy gating even when predictive gains do not materialize.
+\end{itemize}
+
+\section{Discussion}
+The study began with the practical intuition that drift-aware retraining should help in a nonstationary environment. The final evidence is more nuanced. Persistent-drift gating reduced noisy reactions, rolling-window retraining made adaptation more principled, and multi-year ACS introduced realistic temporal variation. Yet these improvements did not change the ranking of the policies.
+
+This is a useful outcome for two reasons. First, it highlights that \emph{detecting drift is not the same as identifying a profitable retraining opportunity}. Second, it demonstrates the value of engineering rigor in empirical ML systems work: a well-instrumented negative result is more informative than a superficially positive but methodologically weak one. From an MLOps perspective, this also supports the view that monitoring and retraining are related but distinct responsibilities~\cite{breck2017mltest,kreuzberger2023mlops}.
+
+\subsection{Threats to Validity}
+Several limitations should be acknowledged.
+\begin{enumerate}[leftmargin=*]
+    \item Some drift remains synthetic even in the multi-year setting, so external validity is not identical to a live production stream.
+    \item Only one model family, XGBoost, was studied. A different learner might respond differently to the same retraining protocol.
+    \item Runtime-oriented summary fields experienced a logging anomaly in some experiment outputs, so timing values should be treated more cautiously than predictive metrics.
+    \item The inference service still loads the latest on-disk artifacts rather than profile-specific artifact namespaces, which is operationally acceptable for a single active profile but not ideal for concurrent multi-profile deployment.
+\end{enumerate}
+
+\subsection{Practical Implications}
+From an engineering perspective, the work suggests three actionable lessons:
+\begin{itemize}[leftmargin=*]
+    \item deploy drift monitoring even if you do not retrain aggressively;
+    \item treat retraining policy as a separate design object rather than an automatic consequence of detected shift;
+    \item evaluate adaptive systems with recovery and regret metrics, not just aggregate averages.
+\end{itemize}
+
+\section{Conclusion}
+This paper presented a complete drift-aware MLOps pipeline for tabular income prediction and used it to study adaptive retraining under both synthetic and temporal shift. The final system integrates large-scale ACS preprocessing, XGBoost training, statistical drift detection, concept-drift-aware policy logic, rolling-window retraining, API serving, MLflow tracking, and Prometheus/Grafana monitoring.
+
+The empirical outcome is clear: adaptive retraining was operationally more efficient than immediate retraining, but static deployment remained the strongest policy on mean F1 in both the single-year and multi-year ACS settings. Importantly, after the addition of multi-year temporal data and stronger methodology, this result should be interpreted as a credible research finding rather than as an artifact of a weak setup.
+
+Future work should compare additional learner families, replace part of the synthetic perturbation regime with purely chronological evaluation windows, and investigate whether richer utility functions---for example combining predictive degradation, fairness drift, and compute cost---produce more decision-useful retraining policies.
+
+\balance
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

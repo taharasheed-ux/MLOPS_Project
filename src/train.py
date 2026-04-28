@@ -11,7 +11,6 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
-import numpy as np
 import xgboost as xgb
 import mlflow
 import mlflow.xgboost
@@ -19,9 +18,9 @@ import mlflow.xgboost
 from src.utils import (
     load_settings,
     get_path,
+    get_processed_data_paths,
     ensure_dir,
     setup_logging,
-    PROJECT_ROOT,
 )
 from src.feature_encoding import EncoderPipeline
 from src.evaluate import compute_metrics, compute_detailed_report
@@ -29,11 +28,31 @@ from src.evaluate import compute_metrics, compute_detailed_report
 logger = setup_logging("train", log_file="train.log")
 
 
+def resolve_model_params(settings: dict | None = None) -> dict:
+    """
+    Resolve model parameters, enabling GPU training when configured and available.
+
+    Falls back to CPU parameters if CUDA training is unavailable at runtime.
+    """
+    if settings is None:
+        settings = load_settings()
+
+    params = dict(settings["model"]["params"])
+    use_gpu = settings["model"].get("use_gpu", False)
+
+    if use_gpu:
+        params.setdefault("tree_method", "hist")
+        params["device"] = "cuda"
+        logger.info("GPU training requested: using XGBoost device='cuda'")
+
+    return params
+
+
 def load_processed_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load processed train/test CSVs from data/processed/."""
-    processed_dir = get_path("processed_data_dir")
-    train_df = pd.read_csv(processed_dir / "train.csv")
-    test_df = pd.read_csv(processed_dir / "test.csv")
+    train_path, test_path = get_processed_data_paths()
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
     logger.info(f"Loaded processed data: train={len(train_df)}, test={len(test_df)}")
     return train_df, test_df
 
@@ -62,18 +81,35 @@ def train_model(
     """
     if params is None:
         settings = load_settings()
-        params = settings["model"]["params"]
+        params = resolve_model_params(settings)
 
     logger.info(f"Training XGBoost with params: {params}")
 
-    model = xgb.XGBClassifier(**params)
-
     start_time = time.time()
-    model.fit(
-        X_train, y_train,
-        eval_set=[(X_test, y_test)],
-        verbose=False,
-    )
+    try:
+        model = xgb.XGBClassifier(**params)
+        model.fit(
+            X_train, y_train,
+            eval_set=[(X_test, y_test)],
+            verbose=False,
+        )
+    except xgb.core.XGBoostError as e:
+        if params.get("device") == "cuda":
+            logger.warning(
+                f"GPU training failed ({e}). Falling back to CPU training."
+            )
+            cpu_params = dict(params)
+            cpu_params.pop("device", None)
+            model = xgb.XGBClassifier(**cpu_params)
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_test, y_test)],
+                verbose=False,
+            )
+            params.clear()
+            params.update(cpu_params)
+        else:
+            raise
     train_time = time.time() - start_time
 
     logger.info(f"Training completed in {train_time:.2f}s")
@@ -185,7 +221,7 @@ def run_training_pipeline(
     logger.info(f"Features: {len(feature_cols)}, Train: {len(X_train)}, Test: {len(X_test)}")
 
     # 3. Train model
-    model_params = settings["model"]["params"]
+    model_params = resolve_model_params(settings)
     start_time = time.time()
     model = train_model(X_train, y_train, X_test, y_test, params=model_params)
     train_duration = time.time() - start_time

@@ -44,6 +44,7 @@ class BatchDriftResult:
     severity_score: float
     drift_detected: bool
     drifted_features: list[str] = field(default_factory=list)
+    severity_components: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Convert to a flat dictionary for logging/MLflow."""
@@ -54,6 +55,10 @@ class BatchDriftResult:
             "severity_score": self.severity_score,
             "drift_detected": self.drift_detected,
             "drifted_features": ", ".join(self.drifted_features),
+            **{
+                f"severity_{key}": value
+                for key, value in self.severity_components.items()
+            },
         }
 
     def to_feature_df(self) -> pd.DataFrame:
@@ -183,7 +188,7 @@ class DriftDetector:
         n_drifted = sum(1 for fr in feature_results if fr.is_drifted)
         drifted_names = [fr.feature for fr in feature_results if fr.is_drifted]
 
-        severity = self._compute_severity(feature_results)
+        severity, severity_components = self._compute_severity(feature_results)
         drift_detected = severity >= self.severity_threshold
 
         result = BatchDriftResult(
@@ -194,6 +199,7 @@ class DriftDetector:
             severity_score=severity,
             drift_detected=drift_detected,
             drifted_features=drifted_names,
+            severity_components=severity_components,
         )
 
         logger.info(
@@ -311,32 +317,52 @@ class DriftDetector:
         result[sorted_idx] = corrected
         return result
 
-    def _compute_severity(self, results: list[FeatureDriftResult]) -> float:
+    def _compute_severity(
+        self, results: list[FeatureDriftResult]
+    ) -> tuple[float, dict[str, float]]:
         """
         Compute global drift severity score.
 
-        Severity = weighted average of effect sizes for drifted features,
-        normalized by total number of features.
+        The score blends:
+        - drift ratio: how many features are materially drifted
+        - mean drifted effect: average effect among flagged features
+        - mean overall effect: background feature movement across all features
         """
         if not results:
-            return 0.0
+            return 0.0, {}
 
         n_total = len(results)
         drifted = [r for r in results if r.is_drifted]
 
         if not drifted:
-            return 0.0
+            return 0.0, {
+                "drift_ratio": 0.0,
+                "mean_drifted_effect": 0.0,
+                "mean_overall_effect": float(np.mean([r.effect_size for r in results])),
+            }
+
+        drift_ratio = len(drifted) / n_total
+        mean_drifted_effect = float(np.mean([r.effect_size for r in drifted]))
+        mean_overall_effect = float(np.mean([r.effect_size for r in results]))
 
         if self.weighting == "uniform":
-            # Simple: (n_drifted / n_total) * mean_effect_size
-            mean_effect = np.mean([r.effect_size for r in drifted])
-            severity = (len(drifted) / n_total) * mean_effect
+            severity = (
+                0.50 * mean_drifted_effect
+                + 0.30 * drift_ratio
+                + 0.20 * mean_overall_effect
+            )
         else:
-            # Uniform fallback
-            mean_effect = np.mean([r.effect_size for r in drifted])
-            severity = (len(drifted) / n_total) * mean_effect
+            severity = (
+                0.50 * mean_drifted_effect
+                + 0.30 * drift_ratio
+                + 0.20 * mean_overall_effect
+            )
 
-        return min(severity, 1.0)
+        return min(severity, 1.0), {
+            "drift_ratio": drift_ratio,
+            "mean_drifted_effect": mean_drifted_effect,
+            "mean_overall_effect": mean_overall_effect,
+        }
 
     @staticmethod
     def _classify_magnitude(effect_size: float, feature_type: str) -> str:
@@ -399,7 +425,9 @@ def run_drift_detection(
     logger.info("=" * 60)
 
     if reference_df is None:
-        ref_path = get_path("processed_data_dir") / "train.csv"
+        from src.utils import get_processed_data_paths
+
+        ref_path, _ = get_processed_data_paths()
         reference_df = pd.read_csv(ref_path)
         logger.info(f"Loaded reference data: {len(reference_df)} rows")
 

@@ -26,6 +26,8 @@ data:
   # Positive label (after stripping whitespace)
   positive_label: ">50K"
   test_size: 0.3
+  processed_train_filename: "train.csv"
+  processed_test_filename: "test.csv"
   # Column names for the UCI Adult dataset
   column_names:
     - "age"

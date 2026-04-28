@@ -17,15 +17,29 @@ severity:
   # How to weight features in severity calculation
   weighting: "uniform"  # "uniform" or "importance_weighted"
   # Severity threshold to raise a drift event
-  threshold: 0.3
+  threshold: 0.1
   # Alternative thresholds for sensitivity experiments
   sensitivity_thresholds: [0.1, 0.2, 0.3, 0.4, 0.5]
 
 # Retraining policy parameters
 retraining_policy:
   # Minimum drift severity to consider retraining
-  severity_threshold: 0.3
+  severity_threshold: 0.1
   # Minimum number of new labeled samples required
   min_new_samples: 500
   # Cooldown period: minimum batches between retrains
   cooldown_batches: 1
+  # Require this many consecutive batches with drift/performance signal
+  persistence_batches: 2
+  # How feature drift and labeled concept drift combine: "either" or "all"
+  signal_combination: "either"
+  concept_drift:
+    enabled: true
+    min_f1_drop: 0.06
+    min_recall_drop: 0.06
+
+retraining_data:
+  # Number of most recent batches to keep for retraining
+  window_batches: 3
+  # Stratified fraction of the original training set retained as a stability anchor
+  anchor_fraction: 0.1

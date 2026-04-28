@@ -21,6 +21,7 @@ data/batches/
 # MLflow artifacts
 mlflow/
 mlruns/
+mlartifacts/
 
 # IDE
 .vscode/
@@ -44,3 +45,13 @@ logs/*.log
 # Models and pytest
 models/*.pkl
 .pytest_cache/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz

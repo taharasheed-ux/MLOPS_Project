@@ -13,14 +13,18 @@ import numpy as np
 def train_df():
     """Load processed training data."""
     from src.utils import get_path
-    return pd.read_csv(get_path("processed_data_dir") / "train.csv")
+    from src.utils import get_processed_data_paths
+    train_path, _ = get_processed_data_paths()
+    return pd.read_csv(train_path)
 
 
 @pytest.fixture(scope="module")
 def test_df():
     """Load processed test data."""
     from src.utils import get_path
-    return pd.read_csv(get_path("processed_data_dir") / "test.csv")
+    from src.utils import get_processed_data_paths
+    _, test_path = get_processed_data_paths()
+    return pd.read_csv(test_path)
 
 
 @pytest.fixture(scope="module")

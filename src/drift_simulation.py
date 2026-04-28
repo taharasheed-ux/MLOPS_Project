@@ -14,7 +14,14 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from src.utils import load_drift_config, load_settings, get_path, ensure_dir, setup_logging
+from src.utils import (
+    load_drift_config,
+    load_settings,
+    get_path,
+    get_processed_data_paths,
+    ensure_dir,
+    setup_logging,
+)
 
 logger = setup_logging("drift_simulation", log_file="drift_simulation.log")
 
@@ -49,6 +56,11 @@ class DriftSimulator:
 
         self.batch_size = self.config.get("batch_size", 2000)
         self.target_col = self.settings["data"]["target_column"]
+        self.source_mode = self.config.get("source_mode", "random_pool")
+        self.temporal_year_column = self.config.get(
+            "temporal_year_column",
+            self.settings["data"].get("acs", {}).get("temporal_year_column", "DATA_YEAR"),
+        )
 
     def generate_batches(self) -> dict[str, pd.DataFrame]:
         """
@@ -61,12 +73,22 @@ class DriftSimulator:
         """
         batches = {}
 
-        for batch_name, batch_cfg in self.config["batches"].items():
+        batch_items = list(self.config["batches"].items())
+        temporal_years = self._get_temporal_years()
+
+        for batch_idx, (batch_name, batch_cfg) in enumerate(batch_items):
             logger.info(f"Generating {batch_name}: {batch_cfg.get('description', '')}")
 
-            # Sample from test data
-            batch_df = self.test_df.sample(
-                n=min(self.batch_size, len(self.test_df)),
+            source_df = self._resolve_source_dataframe(
+                batch_cfg=batch_cfg,
+                batch_index=batch_idx,
+                total_batches=len(batch_items),
+                temporal_years=temporal_years,
+            )
+
+            # Sample from the selected source data
+            batch_df = source_df.sample(
+                n=min(self.batch_size, len(source_df)),
                 replace=True,
                 random_state=self.rng.randint(0, 100000),
             ).reset_index(drop=True)
@@ -93,6 +115,53 @@ class DriftSimulator:
             logger.info(f"  {batch_name}: {len(batch_df)} rows generated")
 
         return batches
+
+    def _get_temporal_years(self) -> list[str]:
+        """Return sorted temporal years available in the test dataframe."""
+        if self.temporal_year_column not in self.test_df.columns:
+            return []
+        years = self.test_df[self.temporal_year_column].dropna().astype(str).unique().tolist()
+        try:
+            return sorted(years, key=lambda year: int(year))
+        except ValueError:
+            return sorted(years)
+
+    def _resolve_source_dataframe(
+        self,
+        batch_cfg: dict,
+        batch_index: int,
+        total_batches: int,
+        temporal_years: list[str],
+    ) -> pd.DataFrame:
+        """Resolve the source dataframe for a batch, optionally using temporal year slices."""
+        if self.source_mode != "temporal_years" or not temporal_years:
+            return self.test_df
+
+        explicit_year = batch_cfg.get("source_year")
+        if explicit_year is not None:
+            source_year = str(explicit_year)
+        else:
+            batch_bins = np.array_split(np.arange(total_batches), len(temporal_years))
+            source_year = temporal_years[-1]
+            for year, indices in zip(temporal_years, batch_bins):
+                if batch_index in indices:
+                    source_year = year
+                    break
+
+        source_df = self.test_df[
+            self.test_df[self.temporal_year_column].astype(str) == str(source_year)
+        ]
+        if source_df.empty:
+            logger.warning(
+                f"Temporal source year {source_year} had no rows. Falling back to full test pool."
+            )
+            return self.test_df
+
+        logger.info(
+            f"  Sampling source rows from {self.temporal_year_column}={source_year} "
+            f"({len(source_df)} candidate rows)"
+        )
+        return source_df
 
     def _apply_covariate_shift(
         self, df: pd.DataFrame, shift_config: dict
@@ -325,8 +394,7 @@ def run_drift_simulation(
     logger.info("=" * 60)
 
     if test_df is None:
-        processed_dir = get_path("processed_data_dir")
-        test_path = processed_dir / "test.csv"
+        _, test_path = get_processed_data_paths()
         if not test_path.exists():
             raise FileNotFoundError(
                 f"Test data not found at {test_path}. Run data_processing first."

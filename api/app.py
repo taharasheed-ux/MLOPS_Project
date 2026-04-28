@@ -7,12 +7,10 @@ Exposes:
 - GET /metrics        : Prometheus metrics for monitoring.
 """
 
-import time
 import pandas as pd
-from typing import List
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
+from typing import Any, List
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 
 from src.train import load_model
@@ -106,27 +104,8 @@ def startup_event():
 
 # ── Pydantic Models ─────────────────────────────────────────────────
 
-class AdultIncomeRecord(BaseModel):
-    age: float = Field(..., json_schema_extra={"example": 39})
-    workclass: str = Field(..., json_schema_extra={"example": "State-gov"})
-    fnlwgt: float = Field(..., json_schema_extra={"example": 77516})
-    education: str = Field(..., json_schema_extra={"example": "Bachelors"})
-    education_num: float = Field(..., alias="education-num", json_schema_extra={"example": 13})
-    marital_status: str = Field(..., alias="marital-status", json_schema_extra={"example": "Never-married"})
-    occupation: str = Field(..., json_schema_extra={"example": "Adm-clerical"})
-    relationship: str = Field(..., json_schema_extra={"example": "Not-in-family"})
-    race: str = Field(..., json_schema_extra={"example": "White"})
-    sex: str = Field(..., json_schema_extra={"example": "Male"})
-    capital_gain: float = Field(..., alias="capital-gain", json_schema_extra={"example": 2174})
-    capital_loss: float = Field(..., alias="capital-loss", json_schema_extra={"example": 0})
-    hours_per_week: float = Field(..., alias="hours-per-week", json_schema_extra={"example": 40})
-    native_country: str = Field(..., alias="native-country", json_schema_extra={"example": "United-States"})
-
-    model_config = {"populate_by_name": True}
-
-
 class PredictionRequest(BaseModel):
-    records: List[AdultIncomeRecord]
+    records: List[dict[str, Any]]
 
 
 class PredictionResponse(BaseModel):
@@ -164,15 +143,20 @@ def predict(request: PredictionRequest):
     PREDICTION_REQUESTS.inc(len(request.records))
 
     # Convert to DataFrame
-    raw_dicts = [record.model_dump(by_alias=True) for record in request.records]
-    df = pd.DataFrame(raw_dicts)
+    if not request.records:
+        raise HTTPException(status_code=400, detail="At least one record is required")
+
+    df = pd.DataFrame(request.records)
 
     with PREDICTION_LATENCY.time():
         # Encode features
         try:
+            required_columns = state.encoder.get_feature_names()
+            missing = [col for col in required_columns if col not in df.columns]
+            if missing:
+                raise ValueError(f"Missing required columns: {missing}")
             encoded_df = state.encoder.transform(df, include_target=False)
-            features = state.encoder.get_feature_names()
-            X = encoded_df[features]
+            X = encoded_df[required_columns]
         except Exception as e:
             logger.error(f"Encoding error: {e}")
             raise HTTPException(status_code=400, detail=f"Data encoding failed: {e}")

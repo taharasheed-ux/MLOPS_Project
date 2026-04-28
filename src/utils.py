@@ -48,12 +48,61 @@ def load_yaml(filename: str) -> dict:
 
 
 def load_settings() -> dict:
-    """Load the main settings.yaml config."""
-    return load_yaml("settings.yaml")
+    """
+    Load settings config.
+
+    Default file is configs/settings.yaml.
+    Override via SETTINGS_FILE env var:
+      - "settings_acs.yaml" (resolved under configs/)
+      - "/absolute/path/to/file.yaml"
+      - "configs/settings_acs.yaml" (relative to project root)
+    """
+    settings_file = os.environ.get("SETTINGS_FILE", "settings.yaml")
+    candidate = Path(settings_file)
+
+    if candidate.is_absolute():
+        config_path = candidate
+    else:
+        config_path = PROJECT_ROOT / candidate
+        if not config_path.exists():
+            config_path = PROJECT_ROOT / "configs" / settings_file
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Settings file not found: {config_path}")
+
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
 
 
 def load_drift_config() -> dict:
-    """Load the drift_config.yaml config."""
+    """
+    Load the drift configuration.
+
+    Resolution order:
+    1. `DRIFT_CONFIG_FILE` environment variable
+    2. `drift_config_acs.yaml` when dataset_profile=acs and the file exists
+    3. `drift_config.yaml`
+    """
+    config_file = os.environ.get("DRIFT_CONFIG_FILE")
+    if config_file:
+        candidate = Path(config_file)
+        if not candidate.is_absolute():
+            candidate = PROJECT_ROOT / candidate
+            if not candidate.exists():
+                candidate = PROJECT_ROOT / "configs" / config_file
+        if not candidate.exists():
+            raise FileNotFoundError(f"Drift config file not found: {candidate}")
+        with open(candidate, "r") as f:
+            return yaml.safe_load(f)
+
+    settings = load_settings()
+    dataset_profile = settings["data"].get("dataset_profile", "adult").lower()
+    if dataset_profile == "acs":
+        acs_config = PROJECT_ROOT / "configs" / "drift_config_acs.yaml"
+        if acs_config.exists():
+            with open(acs_config, "r") as f:
+                return yaml.safe_load(f)
+
     return load_yaml("drift_config.yaml")
 
 
@@ -90,6 +139,21 @@ def get_path(settings_key: str, settings: dict | None = None) -> Path:
         settings = load_settings()
     rel = settings["paths"][settings_key]
     return PROJECT_ROOT / rel
+
+
+def get_processed_data_paths(settings: dict | None = None) -> tuple[Path, Path]:
+    """
+    Resolve processed train/test file paths from settings.
+
+    This allows different dataset profiles to persist distinct processed splits.
+    """
+    if settings is None:
+        settings = load_settings()
+
+    processed_dir = get_path("processed_data_dir", settings)
+    train_name = settings["data"].get("processed_train_filename", "train.csv")
+    test_name = settings["data"].get("processed_test_filename", "test.csv")
+    return processed_dir / train_name, processed_dir / test_name
 
 
 # ── Logging ─────────────────────────────────────────────────────────

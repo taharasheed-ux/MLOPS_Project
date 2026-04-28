@@ -1,0 +1,236 @@
+# ============================================================
+# Drift Simulation Configuration (ACS profile)
+# ============================================================
+
+batch_size: 5000
+source_mode: "temporal_years"
+temporal_year_column: "DATA_YEAR"
+
+batches:
+  batch_1:
+    description: "Clean baseline batch - no drift applied"
+    perturbations: {}
+
+  batch_2:
+    description: "Mild covariate shift on age and weekly hours"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 3
+        WKHP:
+          method: "shift"
+          value: 2
+
+  batch_3:
+    description: "Stronger age shift with occupational redistribution"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 7
+        OCCP:
+          method: "resample"
+          target_distribution:
+            0.0: 0.10
+            440.0: 0.12
+            770.0: 0.10
+            9130.0: 0.10
+            "Other": 0.58
+
+  batch_4:
+    description: "Moderate conditional shift for long-hours and older workers"
+    perturbations:
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.20
+        - condition:
+            feature: "AGEP"
+            operator: ">"
+            value: 55
+          flip_probability: 0.18
+
+  batch_5:
+    description: "Mixed ACS drift scenario"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 5
+        WKHP:
+          method: "shift"
+          value: 4
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 45
+          flip_probability: 0.10
+      feature_importance_shift:
+        AGEP:
+          noise_std_factor: 0.25
+        WKHP:
+          noise_std_factor: 0.20
+
+  batch_6:
+    description: "Strong concept drift with limited covariate movement"
+    perturbations:
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 45
+          flip_probability: 0.28
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 60
+          flip_probability: 0.24
+
+  batch_7:
+    description: "Multi-feature covariate drift across age, hours, and birthplace"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 9
+        WKHP:
+          method: "shift"
+          value: 6
+        POBP:
+          method: "resample"
+          target_distribution:
+            6.0: 0.10
+            12.0: 0.08
+            17.0: 0.07
+            36.0: 0.08
+            "Other": 0.67
+
+  batch_8:
+    description: "Severe mixed drift with covariate, concept, and noise shifts"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 10
+        WKHP:
+          method: "shift"
+          value: 8
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.30
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 58
+          flip_probability: 0.25
+      feature_importance_shift:
+        AGEP:
+          noise_std_factor: 0.35
+        WKHP:
+          noise_std_factor: 0.30
+
+  batch_9:
+    description: "Persistent concept drift regime following severe shift"
+    perturbations:
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 48
+          flip_probability: 0.26
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 57
+          flip_probability: 0.22
+      feature_importance_shift:
+        WKHP:
+          noise_std_factor: 0.15
+
+  batch_10:
+    description: "Broad covariate drift with occupational and birthplace redistribution"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 6
+        WKHP:
+          method: "shift"
+          value: 5
+        OCCP:
+          method: "resample"
+          target_distribution:
+            0.0: 0.08
+            440.0: 0.10
+            770.0: 0.09
+            9130.0: 0.12
+            "Other": 0.61
+        POBP:
+          method: "resample"
+          target_distribution:
+            6.0: 0.11
+            12.0: 0.09
+            17.0: 0.08
+            36.0: 0.09
+            "Other": 0.63
+
+  batch_11:
+    description: "Late-stage mixed drift with stronger label instability"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 8
+        WKHP:
+          method: "shift"
+          value: 6
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.32
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 58
+          flip_probability: 0.28
+      feature_importance_shift:
+        AGEP:
+          noise_std_factor: 0.30
+        WKHP:
+          noise_std_factor: 0.25
+
+  batch_12:
+    description: "Final severe regime with persistent concept and feature drift"
+    perturbations:
+      covariate_shift:
+        AGEP:
+          method: "shift"
+          value: 10
+        WKHP:
+          method: "shift"
+          value: 8
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 48
+          flip_probability: 0.34
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 60
+          flip_probability: 0.30
+      feature_importance_shift:
+        AGEP:
+          noise_std_factor: 0.40
+        WKHP:
+          noise_std_factor: 0.35

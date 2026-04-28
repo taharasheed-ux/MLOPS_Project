@@ -30,6 +30,9 @@ pip install -r requirements.txt
 # Run data pipeline
 python -m src.data_processing
 
+# Run ACS pipeline (programmatic fetch + local snapshot cache)
+SETTINGS_FILE=configs/settings_acs.yaml python -m src.data_processing
+
 # Train baseline model
 python -m src.train
 
@@ -64,3 +67,9 @@ uvicorn api.app:app --host 0.0.0.0 --port 8000
 6. CI/CD automation
 7. Prometheus & Grafana monitoring
 8. Experimental comparison & report
+
+## ACS Dataset (Programmatic)
+
+- ACS loading uses `folktables` with profile `configs/settings_acs.yaml`.
+- First run downloads ACS data and saves a local snapshot to `data/raw/acs_income_full.csv`.
+- Later runs reuse the snapshot if present (`use_local_snapshot_if_exists: true`).

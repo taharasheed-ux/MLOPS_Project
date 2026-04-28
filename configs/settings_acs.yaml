@@ -1,0 +1,145 @@
+# ============================================================
+# ACS settings profile for Drift-Aware MLOps Pipeline
+# Usage:
+#   SETTINGS_FILE=configs/settings_acs.yaml python -m src.data_processing
+# ============================================================
+
+project:
+  name: "drift-aware-mlops"
+  random_seed: 42
+  log_level: "INFO"
+
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  batch_data_dir: "data/batches"
+  models_dir: "models"
+  reports_dir: "reports"
+  figures_dir: "reports/figures"
+  logs_dir: "logs"
+
+data:
+  dataset_profile: "acs"
+  target_column: "income"
+  positive_label: ">50K"
+  test_size: 0.3
+  processed_train_filename: "train_acs_multiyear.csv"
+  processed_test_filename: "test_acs_multiyear.csv"
+
+  # ACSIncome features from folktables
+  column_names:
+    - "AGEP"
+    - "COW"
+    - "SCHL"
+    - "MAR"
+    - "OCCP"
+    - "POBP"
+    - "RELP"
+    - "WKHP"
+    - "SEX"
+    - "RAC1P"
+    - "income"
+
+  numerical_features:
+    - "AGEP"
+    - "WKHP"
+
+  categorical_features:
+    - "COW"
+    - "SCHL"
+    - "MAR"
+    - "OCCP"
+    - "POBP"
+    - "RELP"
+    - "SEX"
+    - "RAC1P"
+
+  acs:
+    survey_years:
+      - "2016"
+      - "2017"
+      - "2018"
+    horizon: "1-Year"
+    survey: "person"
+    temporal_year_column: "DATA_YEAR"
+    temporal_split:
+      enabled: true
+      initial_train_years: 1
+    # Complete ACS run across all configured states and PR for each year.
+    states:
+      - "AL"
+      - "AK"
+      - "AZ"
+      - "AR"
+      - "CA"
+      - "CO"
+      - "CT"
+      - "DE"
+      - "FL"
+      - "GA"
+      - "HI"
+      - "ID"
+      - "IL"
+      - "IN"
+      - "IA"
+      - "KS"
+      - "KY"
+      - "LA"
+      - "ME"
+      - "MD"
+      - "MA"
+      - "MI"
+      - "MN"
+      - "MS"
+      - "MO"
+      - "MT"
+      - "NE"
+      - "NV"
+      - "NH"
+      - "NJ"
+      - "NM"
+      - "NY"
+      - "NC"
+      - "ND"
+      - "OH"
+      - "OK"
+      - "OR"
+      - "PA"
+      - "RI"
+      - "SC"
+      - "SD"
+      - "TN"
+      - "TX"
+      - "UT"
+      - "VT"
+      - "VA"
+      - "WA"
+      - "WV"
+      - "WI"
+      - "WY"
+      - "PR"
+    save_snapshot: false
+    use_local_snapshot_if_exists: true
+    snapshot_filename: "acs_income_multiyear_full.csv"
+    memory_efficient_processing: true
+
+model:
+  type: "xgboost"
+  use_gpu: true
+  params:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    tree_method: "hist"
+    eval_metric: "logloss"
+    random_state: 42
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "drift-aware-pipeline-acs"
+
+api:
+  host: "0.0.0.0"
+  port: 8000

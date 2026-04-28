@@ -1,31 +1,44 @@
 import os
 import time
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from src.utils import get_path, load_settings
 from src.train import run_training_pipeline
-from src.retrain import retrain_model, ModelVersionManager
+from src.retrain import retrain_model, ModelVersionManager, prepare_retraining_data
 from src.drift_detection import DriftDetector
 from src.policy_engine import RetrainingPolicyEngine
-from src.evaluate import compute_metrics
+from src.evaluate import compute_metrics, extract_core_metrics
 
 def load_batches():
     batches = {}
-    for i in range(1, 6):
-        path = get_path("batch_data_dir") / f"batch_{i}.csv"
-        if path.exists():
-            batches[f"batch_{i}"] = pd.read_csv(path)
+    batch_dir = get_path("batch_data_dir")
+    batch_paths = sorted(
+        batch_dir.glob("batch_*.csv"),
+        key=lambda p: int(p.stem.split("_")[-1]),
+    )
+    for path in batch_paths:
+        batches[path.stem] = pd.read_csv(path)
     return batches
 
-def simulate(policy_name, severity_threshold=2.0, min_new_samples=0, cooldown_batches=0):
+def simulate(
+    policy_name,
+    severity_threshold=2.0,
+    min_new_samples=0,
+    cooldown_batches=0,
+    strategy="policy",
+):
     print(f"[{policy_name}] Starting simulation...")
     
     # 1. Base model training
     res = run_training_pipeline(run_name=f"sim_{policy_name}", use_mlflow=False)
     base_model = res["model"]
     base_encoder = res["encoder"]
-    train_data = pd.read_csv(get_path("processed_data_dir") / "train.csv")
+    from src.utils import get_processed_data_paths
+    train_path, _ = get_processed_data_paths()
+    train_data = pd.read_csv(train_path)
+    original_train_data = train_data.copy()
+    baseline_metrics = extract_core_metrics(res["metrics"], prefix="test_")
     
     version_mgr = ModelVersionManager()
     policy_engine = RetrainingPolicyEngine({
@@ -42,18 +55,19 @@ def simulate(policy_name, severity_threshold=2.0, min_new_samples=0, cooldown_ba
     current_model = base_model
     current_encoder = base_encoder
     acc_samples = pd.DataFrame()
+    recent_batches = []
     
     metrics_history = []
     
     total_retrain_time = 0.0
     total_inference_time = 0.0
     retrain_count = 0
+    settings = load_settings()
     
     for batch_name, batch_df in batches.items():
         # Evaluate performance (Inference)
         inf_start = time.time()
         encoded = current_encoder.transform(batch_df, include_target=True)
-        settings = load_settings()
         X = encoded[current_encoder.get_feature_names()]
         y = encoded[settings["data"]["target_column"]]
         y_pred = current_model.predict(X)
@@ -61,34 +75,61 @@ def simulate(policy_name, severity_threshold=2.0, min_new_samples=0, cooldown_ba
         total_inference_time += inf_time
         
         mets = compute_metrics(y, y_pred, prefix="")
+        current_metrics = extract_core_metrics(mets)
         
         # Drift Detection
         drift_res = detector.detect(batch_df, batch_name)
         acc_samples = pd.concat([acc_samples, batch_df])
+        recent_batches.append(batch_df.copy())
         
         # Policy
-        decision = policy_engine.evaluate(drift_res, len(acc_samples))
+        decision = policy_engine.evaluate(
+            drift_res,
+            len(acc_samples),
+            current_metrics=current_metrics,
+            baseline_metrics=baseline_metrics,
+        )
         
         retrain_triggered = False
         train_duration = 0.0
+
+        if strategy == "static":
+            should_retrain = False
+        elif strategy == "immediate":
+            should_retrain = (
+                drift_res.drift_detected
+                or decision.concept_drift_met
+            )
+        else:
+            should_retrain = decision.should_retrain
         
-        if decision.should_retrain:
+        if should_retrain:
             retrain_triggered = True
             retrain_count += 1
             
             # Retrain
+            retraining_df = prepare_retraining_data(
+                recent_batches=recent_batches,
+                original_train_data=original_train_data,
+            )
             ret_start = time.time()
             ret_res = retrain_model(
-                acc_samples, current_encoder, version_mgr, 
-                old_train_data=train_data, use_mlflow=False
+                retraining_df,
+                current_encoder,
+                version_mgr,
+                old_train_data=None,
+                use_mlflow=False,
+                new_data_sample_count=len(acc_samples),
             )
             train_duration = time.time() - ret_start
             total_retrain_time += train_duration
             
             current_model = ret_res["model"]
-            train_data = pd.concat([train_data, acc_samples])
+            current_encoder = ret_res["encoder"]
+            train_data = ret_res["train_data"]
             acc_samples = pd.DataFrame() 
             detector.update_reference(train_data)
+            baseline_metrics = extract_core_metrics(ret_res["metrics"], prefix="retrain_")
             
         policy_engine.register_batch_processed(retrain_triggered)
         
@@ -101,6 +142,7 @@ def simulate(policy_name, severity_threshold=2.0, min_new_samples=0, cooldown_ba
             "recall": mets["recall"],
             "drift_severity": drift_res.severity_score,
             "drift_flags": drift_res.n_features_drifted,
+            "concept_drift": decision.concept_drift_met,
             "retrained": retrain_triggered,
             "train_duration": train_duration,
             "inference_time": inf_time
@@ -116,6 +158,7 @@ def simulate(policy_name, severity_threshold=2.0, min_new_samples=0, cooldown_ba
         "total_retrain_time": total_retrain_time,
         "total_inference_time": total_inference_time
     }
+    summary.update(compute_research_summary(df_metrics))
     
     return df_metrics, summary
 
@@ -130,8 +173,86 @@ def generate_markdown_table(df):
         rows.append(row_str)
     return "\n".join([header_str, sep_str] + rows)
 
+
+def compute_research_summary(df_metrics: pd.DataFrame) -> dict:
+    baseline_f1 = float(df_metrics.iloc[0]["f1"])
+    baseline_acc = float(df_metrics.iloc[0]["accuracy"])
+    f1_drops = baseline_f1 - df_metrics["f1"]
+    acc_drops = baseline_acc - df_metrics["accuracy"]
+
+    recovery_gains = []
+    for idx, row in df_metrics.iterrows():
+        if row["retrained"] and idx + 1 < len(df_metrics):
+            recovery_gains.append(df_metrics.iloc[idx + 1]["f1"] - row["f1"])
+
+    return {
+        "worst_batch_accuracy": float(df_metrics["accuracy"].min()),
+        "worst_batch_f1": float(df_metrics["f1"].min()),
+        "mean_f1_drop_from_batch1": float(f1_drops.mean()),
+        "max_f1_drop_from_batch1": float(f1_drops.max()),
+        "mean_accuracy_drop_from_batch1": float(acc_drops.mean()),
+        "degradation_area_f1": float(f1_drops.clip(lower=0).sum()),
+        "degradation_area_accuracy": float(acc_drops.clip(lower=0).sum()),
+        "concept_drift_batches": int(df_metrics["concept_drift"].sum()),
+        "drift_alert_batches": int((df_metrics["drift_severity"] > 0).sum()),
+        "post_retrain_avg_f1": (
+            float(df_metrics.loc[df_metrics["retrained"], "f1"].mean())
+            if df_metrics["retrained"].any()
+            else 0.0
+        ),
+        "mean_recovery_gain_next_batch_f1": (
+            float(sum(recovery_gains) / len(recovery_gains)) if recovery_gains else 0.0
+        ),
+    }
+
+
+def get_report_paths(settings: dict) -> tuple[Path, Path]:
+    profile = settings["data"].get("dataset_profile", "adult").lower()
+    reports_dir = get_path("reports_dir", settings)
+    figures_dir = get_path("figures_dir", settings) / profile
+    os.makedirs(figures_dir, exist_ok=True)
+    report_path = reports_dir / f"results_{profile}.md"
+    return report_path, figures_dir
+
+
+def build_conclusion(df_summary: pd.DataFrame) -> str:
+    ranking = df_summary.sort_values(["mean_f1", "mean_accuracy"], ascending=False).reset_index(drop=True)
+    best = ranking.iloc[0]
+    policy_standard = df_summary[df_summary["policy_name"] == "Policy-Standard"].iloc[0]
+    static = df_summary[df_summary["policy_name"] == "Static"].iloc[0]
+    immediate = df_summary[df_summary["policy_name"] == "Immediate"].iloc[0]
+
+    lines = [
+        f"The best mean-F1 policy in this run was **{best['policy_name']}** "
+        f"(mean_f1={best['mean_f1']:.4f}, mean_accuracy={best['mean_accuracy']:.4f}).",
+        f"**Policy-Standard** retrained {int(policy_standard['retrain_count'])} times "
+        f"versus {int(immediate['retrain_count'])} for **Immediate** and "
+        f"{int(static['retrain_count'])} for **Static**.",
+    ]
+
+    if policy_standard["mean_f1"] > static["mean_f1"]:
+        lines.append(
+            "Policy-based retraining improved mean F1 over the static baseline "
+            f"by {policy_standard['mean_f1'] - static['mean_f1']:.4f}."
+        )
+    else:
+        lines.append(
+            "Policy-based retraining did not beat the static baseline on mean F1 in this run; "
+            "this suggests the simulated drift was detectable but not strong enough to justify "
+            "every retrain under the current policy and perturbation design."
+        )
+
+    lines.append(
+        f"Policy-Standard saw {int(policy_standard['concept_drift_batches'])} concept-drift batches "
+        f"and achieved a mean next-batch F1 recovery gain of "
+        f"{policy_standard['mean_recovery_gain_next_batch_f1']:.4f} after retraining events."
+    )
+
+    return " ".join(lines)
+
 def main():
-    os.makedirs("reports/figures", exist_ok=True)
+    settings = load_settings()
+    report_path, figures_dir = get_report_paths(settings)
     
     results = {}
     summaries = []
@@ -139,9 +260,9 @@ def main():
     # Experiment A/B: Baselines and Adaptive Policies
     print("--- Experiment A & B: Static vs Immediate vs Policy ---")
     scenarios = {
-        "Static": {"severity_threshold": 999.0, "min_new_samples": 0, "cooldown_batches": 0},
-        "Immediate": {"severity_threshold": 0.0, "min_new_samples": 0, "cooldown_batches": 0},
-        "Policy-Standard": {"severity_threshold": 0.15, "min_new_samples": 1000, "cooldown_batches": 1}
+        "Static": {"severity_threshold": 999.0, "min_new_samples": 0, "cooldown_batches": 0, "strategy": "static"},
+        "Immediate": {"severity_threshold": 0.0, "min_new_samples": 0, "cooldown_batches": 0, "strategy": "immediate"},
+        "Policy-Standard": {"severity_threshold": 0.15, "min_new_samples": 1000, "cooldown_batches": 1, "strategy": "policy"}
     }
     
     for name, args in scenarios.items():
@@ -154,7 +275,13 @@ def main():
     sensitivities = [0.05, 0.25, 0.35]
     for thresh in sensitivities:
         name = f"Policy-Thresh{thresh}"
-        df_m, summ = simulate(name, severity_threshold=thresh, min_new_samples=1000, cooldown_batches=1)
+        df_m, summ = simulate(
+            name,
+            severity_threshold=thresh,
+            min_new_samples=1000,
+            cooldown_batches=1,
+            strategy="policy",
+        )
         results[name] = df_m
         summaries.append(summ)
 
@@ -174,7 +301,7 @@ def main():
     ax2.legend()
     ax2.grid(True)
     plt.tight_layout()
-    plt.savefig("reports/figures/metrics_comparison.png")
+    plt.savefig(figures_dir / "metrics_comparison.png")
     
     # Plot 2: Drift Timeline and Retraining Events
     df_pol = results["Policy-Standard"]
@@ -196,7 +323,7 @@ def main():
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())
     plt.grid(True)
-    plt.savefig("reports/figures/drift_and_retrains.png")
+    plt.savefig(figures_dir / "drift_and_retrains.png")
     
     # Plot 3: Cost vs Performance (Experiment D)
     df_summ = pd.DataFrame(summaries)
@@ -208,11 +335,13 @@ def main():
     plt.xlabel("Total Retrain Time (seconds)")
     plt.ylabel("Mean Accuracy")
     plt.grid(True)
-    plt.savefig("reports/figures/cost_vs_performance.png")
+    plt.savefig(figures_dir / "cost_vs_performance.png")
     
-    # Write comprehensive reports/results.md
-    with open("reports/results.md", "w") as f:
+    # Write profile-specific report
+    with open(report_path, "w") as f:
+        profile = settings["data"].get("dataset_profile", "adult").upper()
         f.write("# Drift-Aware Retraining Project - Final Report\n\n")
+        f.write(f"Dataset profile: **{profile}**\n\n")
         
         f.write("## 1) Experiment A: Static vs Adaptive System\n")
         f.write("We compare a statically deployed model against a system capable of adaptive drift-aware retaining.\n")
@@ -232,13 +361,16 @@ def main():
         f.write(generate_markdown_table(sens_df) + "\n\n")
         
         f.write("## 4) Experiment D: Cost vs Performance Trade-offs\n")
-        f.write("Comparison of mean classification metrics against system latency and retrain durations over 5 batches.\n")
+        f.write("Comparison of mean classification metrics against system latency and retrain durations across all configured batches.\n")
         f.write(generate_markdown_table(df_summ) + "\n\n")
         
         f.write("## Core Research Conclusion\n")
-        f.write("As hypothesized, **Policy-based retraining** successfully avoids the high computational overhead of **Immediate retraining** (which fires on every minor distributional shift), while heavily outperforming the **Static** baseline's severe degradation on simulated covariate and conditional drift (Batch 3 & 5). ")
+        f.write(build_conclusion(df_summ))
 
-    print("\nExperiments rigorously executed! Generated outputs properly located in reports/results.md and reports/figures/")
+    print(
+        "\nExperiments executed. Generated outputs located at "
+        f"{report_path} and {figures_dir}/"
+    )
 
 if __name__ == "__main__":
     main()

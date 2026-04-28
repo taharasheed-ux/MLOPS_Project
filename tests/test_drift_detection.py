@@ -91,6 +91,8 @@ def test_drift_detection_with_drift(reference_data, current_data_with_drift, con
 
     # Severity should be > 0 and potentially trigger alert depending on threshold
     assert result.severity_score > 0
+    assert "drift_ratio" in result.severity_components
+    assert "mean_drifted_effect" in result.severity_components
     # In this case 2/4 features drifted, uniform weighting severity = 0.5 * mean_effect
     # Check that magnitude is not "none" for drifted features
     for fr in result.feature_results:

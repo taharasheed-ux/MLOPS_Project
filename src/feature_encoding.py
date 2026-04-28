@@ -67,6 +67,13 @@ class EncoderPipeline:
         """
         logger.info("Fitting encoders on training data...")
 
+        missing = [
+            col for col in (self.categorical_features + [self.target_column])
+            if col not in df.columns
+        ]
+        if missing:
+            raise ValueError(f"Missing required columns for encoder fit: {missing}")
+
         # Fit categorical encoder
         cat_data = df[self.categorical_features].astype(str)
         self.feature_encoder.fit(cat_data)
@@ -106,6 +113,13 @@ class EncoderPipeline:
             raise RuntimeError("Encoders not fitted. Call fit() first.")
 
         result = df.copy()
+
+        missing = [
+            col for col in self.categorical_features + self.numerical_features
+            if col not in result.columns
+        ]
+        if missing:
+            raise ValueError(f"Missing required feature columns: {missing}")
 
         # Encode categorical features
         cat_data = result[self.categorical_features].astype(str)
