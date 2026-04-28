@@ -982,6 +982,32 @@ The next extension added after that was **multi-year ACS temporal support**:
 
 These changes were introduced to make the final experiments more defensible for research reporting even when adaptive retraining does not outperform the static baseline.
 
+### 20.2 Temporal Regime Diagnostic
+
+After review feedback, a dedicated diagnostic experiment was added:
+
+- `experiments/run_regime_diagnostics.py`
+
+This script directly tests whether the learned rules changed across ACS years and whether the 10% historical anchor pulled retrained models toward the 2016 baseline. It trains and compares:
+
+- `2016_only`
+- `2017_2018_only`
+- `2017_2018_plus_10pct_2016_anchor`
+- `2016_2018_expanding`
+
+Each model is evaluated on 2018 data, and the script writes:
+
+- `reports/diagnostics/acs_regime/regime_metrics.csv`
+- `reports/diagnostics/acs_regime/feature_importances.csv`
+- `reports/diagnostics/acs_regime/importance_diagnostics.csv`
+- `reports/diagnostics/acs_regime/feature_importance_regimes.png`
+
+Run it after multi-year ACS preprocessing:
+
+```bash
+PYTHONPATH=. SETTINGS_FILE=configs/settings_acs.yaml python -m experiments.run_regime_diagnostics
+```
+
 ---
 
 ## 21. Testing Strategy
@@ -1125,6 +1151,39 @@ To reproduce the final ACS experiment path after the latest changes:
 6. optionally run `experiments/run_comprehensive.py` with Docker services and MLflow active for live-stack validation
 
 For the multi-year ACS configuration, preprocessing will now use the configured `survey_years` list in `configs/settings_acs.yaml`, produce `train_acs_multiyear.csv` and `test_acs_multiyear.csv`, and preserve the year label for temporal batch generation.
+
+### 24.3 Noise-Ablation Diagnostic for Retraining Validity
+
+The project now includes a focused ACS diagnostic for separating learnable temporal drift from synthetic subgroup label-flip noise:
+
+```bash
+SETTINGS_FILE=configs/settings_acs.yaml python -m experiments.run_noise_ablation
+```
+
+The main ACS drift configuration, `configs/drift_config_acs.yaml`, now avoids subgroup-specific synthetic label flips and focuses on learnable temporal, covariate, and feature-noise drift. The earlier label-flip schedule is preserved separately as `configs/drift_config_acs_label_flip_stress.yaml` for stress testing and ablation only.
+
+This script trains one ACS baseline model and evaluates three online policies across four stream designs:
+
+- `clean_temporal`: real 2017-2018 temporal batches with no synthetic perturbation
+- `covariate_feature_shift`: covariate and feature-noise shifts, but no label flips
+- `label_flip_only`: subgroup-specific synthetic label flips only
+- `full_with_label_flips`: the label-flip stress-test schedule with covariate, feature-noise, and synthetic label perturbations
+
+For each stream, it compares:
+
+- `Static`: no retraining
+- `Policy-CurrentAnchor`: rolling-window retraining with the configured historical anchor
+- `Policy-SlidingNoAnchor`: pure sliding-window retraining with no historical anchor
+
+Outputs are saved under `reports/diagnostics/acs_noise_ablation/`:
+
+- `noise_ablation_batch_metrics.csv`
+- `noise_ablation_summary.csv`
+- `noise_ablation_report.md`
+- F1 timeline plots for each ablation stream
+- `mean_f1_by_ablation.png`
+
+The purpose is to answer whether retraining helps under clean/learnable drift and whether subgroup-specific label flips behave more like contradictory label noise. If policy retraining improves clean temporal or covariate/feature drift but not label-flip drift, the correct conclusion is that the retraining mechanism is useful but the synthetic label-flip design is not a realistic adaptation target for the main paper experiment.
 
 ---
 

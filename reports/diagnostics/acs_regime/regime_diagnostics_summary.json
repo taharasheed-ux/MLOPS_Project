@@ -1,0 +1,16 @@
+{
+  "observed_deltas": {
+    "f1_2017_2018_only_minus_2016_only": 0.02390742566564152,
+    "f1_anchor_minus_2017_2018_only": 0.00015177121412510183,
+    "f1_expanding_minus_2017_2018_only": -0.0020994697070095065,
+    "l1_2017_2018_only_from_2016": 0.0702667087316513,
+    "l1_anchor_from_2016": 0.07775659114122391,
+    "l1_expanding_from_2016": 0.07476752996444702
+  },
+  "interpretation": {
+    "temporal_shift": "Training on 2017-2018 improves held-out 2018 F1 over 2016-only, so the later-year regime contains learnable signal rather than pure noise.",
+    "anchor_effect": "The full 2017-2018 plus 10% 2016 anchor model is effectively tied with the 2017-2018-only model in this diagnostic. The anchor does not appear to hold back adaptation when future data is abundant.",
+    "expanding_window_effect": "The expanding-window model is close in accuracy but has lower F1 and recall than the 2017-2018-only model, consistent with mild historical dilution in a drifting setting.",
+    "feature_importance_shift": "Feature-importance distances from the 2016 baseline are modest rather than regime-breaking; SCHL remains the top feature across all models."
+  }
+}

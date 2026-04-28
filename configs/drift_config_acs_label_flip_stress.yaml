@@ -1,9 +1,11 @@
 # ============================================================
-# Drift Simulation Configuration (ACS profile)
+# ACS Label-Flip Stress-Test Drift Configuration
 # ============================================================
-# Main ACS experiments intentionally avoid subgroup-specific synthetic
-# label flips. Label-flip regimes are retained separately in
-# drift_config_acs_label_flip_stress.yaml for diagnostic stress tests.
+# This file preserves the earlier subgroup label-flip design for
+# diagnostic/stress-test use only. The main ACS experiment uses
+# drift_config_acs.yaml, which avoids synthetic label flips and focuses
+# on learnable temporal/covariate/feature drift.
+# ============================================================
 
 batch_size: 5000
 source_mode: "temporal_years"
@@ -42,21 +44,22 @@ batches:
             "Other": 0.58
 
   batch_4:
-    description: "Moderate learnable covariate shift for long-hours and older workers"
+    description: "Synthetic label-flip stress for long-hours and older workers"
     perturbations:
-      covariate_shift:
-        AGEP:
-          method: "shift"
-          value: 4
-        WKHP:
-          method: "shift"
-          value: 3
-      feature_importance_shift:
-        WKHP:
-          noise_std_factor: 0.10
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.20
+        - condition:
+            feature: "AGEP"
+            operator: ">"
+            value: 55
+          flip_probability: 0.18
 
   batch_5:
-    description: "Mixed ACS learnable drift scenario"
+    description: "Mixed ACS drift with synthetic label flips"
     perturbations:
       covariate_shift:
         AGEP:
@@ -65,6 +68,12 @@ batches:
         WKHP:
           method: "shift"
           value: 4
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 45
+          flip_probability: 0.10
       feature_importance_shift:
         AGEP:
           noise_std_factor: 0.25
@@ -72,17 +81,19 @@ batches:
           noise_std_factor: 0.20
 
   batch_6:
-    description: "Sustained feature drift with limited covariate movement"
+    description: "Strong synthetic label-flip stress with limited covariate movement"
     perturbations:
-      covariate_shift:
-        WKHP:
-          method: "shift"
-          value: 3
-      feature_importance_shift:
-        AGEP:
-          noise_std_factor: 0.25
-        WKHP:
-          noise_std_factor: 0.25
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 45
+          flip_probability: 0.28
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 60
+          flip_probability: 0.24
 
   batch_7:
     description: "Multi-feature covariate drift across age, hours, and birthplace"
@@ -104,7 +115,7 @@ batches:
             "Other": 0.67
 
   batch_8:
-    description: "Severe mixed learnable drift with covariate and noise shifts"
+    description: "Severe mixed drift with covariate, synthetic label-flip, and noise shifts"
     perturbations:
       covariate_shift:
         AGEP:
@@ -113,6 +124,17 @@ batches:
         WKHP:
           method: "shift"
           value: 8
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.30
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 58
+          flip_probability: 0.25
       feature_importance_shift:
         AGEP:
           noise_std_factor: 0.35
@@ -120,20 +142,22 @@ batches:
           noise_std_factor: 0.30
 
   batch_9:
-    description: "Persistent feature-noise regime following severe shift"
+    description: "Persistent synthetic label-flip regime following severe shift"
     perturbations:
-      covariate_shift:
-        AGEP:
-          method: "shift"
-          value: 5
-        WKHP:
-          method: "shift"
-          value: 5
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 48
+          flip_probability: 0.26
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 57
+          flip_probability: 0.22
       feature_importance_shift:
-        AGEP:
-          noise_std_factor: 0.20
         WKHP:
-          noise_std_factor: 0.25
+          noise_std_factor: 0.15
 
   batch_10:
     description: "Broad covariate drift with occupational and birthplace redistribution"
@@ -163,7 +187,7 @@ batches:
             "Other": 0.63
 
   batch_11:
-    description: "Late-stage mixed drift with stronger feature instability"
+    description: "Late-stage mixed drift with stronger synthetic label instability"
     perturbations:
       covariate_shift:
         AGEP:
@@ -172,6 +196,17 @@ batches:
         WKHP:
           method: "shift"
           value: 6
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 50
+          flip_probability: 0.32
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 58
+          flip_probability: 0.28
       feature_importance_shift:
         AGEP:
           noise_std_factor: 0.30
@@ -179,7 +214,7 @@ batches:
           noise_std_factor: 0.25
 
   batch_12:
-    description: "Final severe regime with persistent covariate and feature drift"
+    description: "Final severe stress regime with synthetic label and feature drift"
     perturbations:
       covariate_shift:
         AGEP:
@@ -188,6 +223,17 @@ batches:
         WKHP:
           method: "shift"
           value: 8
+      conditional_shift:
+        - condition:
+            feature: "WKHP"
+            operator: ">="
+            value: 48
+          flip_probability: 0.34
+        - condition:
+            feature: "AGEP"
+            operator: ">="
+            value: 60
+          flip_probability: 0.30
       feature_importance_shift:
         AGEP:
           noise_std_factor: 0.40
