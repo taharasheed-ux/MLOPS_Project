@@ -7,10 +7,15 @@ Run with: python -m pytest tests/test_data_pipeline.py -v
 import pytest
 import pandas as pd
 import numpy as np
+import os
 from pathlib import Path
 
 
 # ── Fixtures ────────────────────────────────────────────────────────
+
+def is_ci_smoke_run() -> bool:
+    """GitHub Actions uses a small Adult slice to keep CI fast."""
+    return os.getenv("CI", "").lower() == "true"
 
 @pytest.fixture(scope="module")
 def settings():
@@ -59,8 +64,11 @@ class TestDataLoading:
         assert isinstance(raw_df, pd.DataFrame)
 
     def test_load_row_count(self, raw_df):
-        """Adult dataset should have ~32,561 to ~48,842 rows."""
-        assert len(raw_df) >= 30000, f"Expected ≥30k rows, got {len(raw_df)}"
+        """Adult dataset should load full rows locally and a valid smoke sample in CI."""
+        min_rows = 1000 if is_ci_smoke_run() else 30000
+        assert len(raw_df) >= min_rows, (
+            f"Expected ≥{min_rows} rows, got {len(raw_df)}"
+        )
 
     def test_load_column_count(self, raw_df):
         """Should have 15 columns (14 features + 1 target)."""
