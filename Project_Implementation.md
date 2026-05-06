@@ -510,7 +510,7 @@ This gives the project a self-contained experiment tracking option for local use
 
 ### 12.4 Practical Note
 
-The current `docker-compose.yml` brings up API, Prometheus, and Grafana. MLflow has its own Dockerfile and storage directories, but it is not yet wired as a compose service in the current compose file. The implementation document should treat MLflow as present and integrated at the code level, but only partially containerized at the compose-orchestration level.
+The current `docker-compose.yml` brings up API, MLflow, Prometheus, and Grafana. This means experiment tracking is available both from local Python runs and from the containerized stack.
 
 ---
 
@@ -580,6 +580,7 @@ It:
 `docker/docker-compose.yml` currently defines:
 
 - `api`
+- `mlflow`
 - `prometheus`
 - `grafana`
 
@@ -595,6 +596,7 @@ This lets the running service use host-generated configs and newly trained model
 Current local ports:
 
 - API: `8080 -> 8000`
+- MLflow: `5000`
 - Prometheus: `9090`
 - Grafana: `3000`
 
@@ -781,9 +783,10 @@ Docker is used to package the runtime services and make local deployment reprodu
 In this project, Docker is used for:
 
 - packaging the FastAPI inference service
+- running MLflow
 - running Prometheus
 - running Grafana
-- defining a local multi-service stack through `docker-compose`
+- defining a local multi-service stack through Docker Compose
 
 Docker separates the serving and monitoring runtime from the notebook/script environment and makes the stack easier to reproduce on another machine.
 
@@ -1052,8 +1055,6 @@ The implementation is strong, but not fully complete in every production sense.
 
 Important limitations:
 
-- MLflow is implemented in code and has a Dockerfile, but is not yet included in `docker-compose.yml`
-- the API still uses FastAPI startup event hooks, which are deprecated in favor of lifespan handlers
 - concept drift requires labeled feedback, which this project assumes is available in batch form
 - retraining and deployment orchestration are still driven by experiment scripts rather than a dedicated scheduler or eventing system
 - there is no model registry promotion workflow beyond saved versioned artifacts and MLflow run tracking
@@ -1070,7 +1071,7 @@ To demonstrate the project from scratch:
 1. Prepare the environment and install dependencies
 2. Run the data pipeline for the selected dataset profile
 3. Train the baseline model
-4. Start the API, Prometheus, and Grafana stack with Docker
+4. Start the API, MLflow, Prometheus, and Grafana stack with Docker
 5. Generate drifted batches
 6. Run experiment scripts that evaluate drift and policy logic
 7. Observe:
@@ -1108,16 +1109,17 @@ Start the Docker monitoring stack:
 
 ```bash
 cd docker
-docker-compose up -d
-docker-compose ps
+docker compose up -d --build
+docker compose ps
 cd ..
 ```
 
-This brings up the API container, Prometheus, and Grafana.
+This brings up the API container, MLflow, Prometheus, and Grafana.
 
 Useful Docker-stack URLs:
 
 - `http://localhost:8080/health` for the containerized API
+- `http://localhost:5000` for MLflow
 - `http://localhost:9090` for Prometheus
 - `http://localhost:3000` for Grafana
 
@@ -1184,6 +1186,20 @@ Outputs are saved under `reports/diagnostics/acs_noise_ablation/`:
 - `mean_f1_by_ablation.png`
 
 The purpose is to answer whether retraining helps under clean/learnable drift and whether subgroup-specific label flips behave more like contradictory label noise. If policy retraining improves clean temporal or covariate/feature drift but not label-flip drift, the correct conclusion is that the retraining mechanism is useful but the synthetic label-flip design is not a realistic adaptation target for the main paper experiment.
+
+### 24.4 Final MLOps Compliance Hardening
+
+After the final research run, the implementation was revisited against the formal project requirements. The following scoring-oriented improvements were added:
+
+- MLflow was promoted from a standalone/local tool into the Docker Compose stack through a dedicated `mlflow` service.
+- `.dockerignore` was added so Docker builds do not accidentally include raw ACS data, processed datasets, model binaries, logs, reports, virtual environments, or MLflow artifacts.
+- The FastAPI application was migrated from deprecated startup event hooks to lifespan-based startup loading.
+- GitHub Actions was strengthened from test-only CI into a CI/CD validation workflow that runs linting, smoke data/training steps, tests, compile checks, Docker Compose validation, and Docker image builds.
+- The Makefile was expanded with ACS-specific commands for baseline training, drift generation, final experiments, noise ablation, and local MLflow startup.
+- `MLOPS_REQUIREMENTS_AUDIT.md` was added as an evaluator-facing mapping from each mandatory requirement to concrete repository evidence.
+- README and system documentation were updated to describe the full stack: API, MLflow, Docker, Prometheus, Grafana, CI/CD, final reports, and research diagnostics.
+
+This closes the main non-research gaps: experiment tracking, containerization, monitoring, CI/CD automation, local deployment, and documentation are now all explicitly represented in the repository.
 
 ---
 

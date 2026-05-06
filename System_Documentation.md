@@ -5,7 +5,7 @@ This document provides a comprehensive technical overview of the implementation 
 ---
 
 ## 1. Project Objective
-To build a production-grade MLOps system that maintains model integrity in non-stationary environments. The system uses **Two-Layer Drift Detection** and a **Policy-Based Retraining Engine** to minimize operational costs while maximizing predictive performance.
+To build a research-grade MLOps system that maintains model integrity in non-stationary environments and evaluates when adaptive retraining is actually useful. The system uses drift detection, policy-gated retraining, experiment tracking, containerized deployment, monitoring, and CI/CD automation.
 
 ---
 
@@ -21,10 +21,13 @@ The brain of the system is contained in two modules that operate independently o
 *   **Layer 2 (Global Severity)**: Aggregates individual feature shifts into a single **Severity Score [0 to 1]** using effect sizes (Cramér's V and KS-Statistic).
 
 #### **B. Policy Engine (`src/policy_engine.py`)**
-*   **Cost-Aware Triggers**: Instead of retraining on every alert, this engine evaluates three gates:
-    1.  **Severity Gate**: Is the drift score >= 0.30?
-    2.  **Data Gate**: Are there >= 1000 new labeled samples accumulated?
-    3.  **Cooldown Gate**: Have at least 1-2 batches passed since the last update?
+*   **Cost-Aware Triggers**: Instead of retraining on every alert, this engine evaluates:
+    1.  **Severity Gate**: Is feature drift large enough?
+    2.  **Concept Gate**: Has labeled performance degraded?
+    3.  **Data Gate**: Are enough new labeled samples accumulated?
+    4.  **Cooldown Gate**: Has enough time passed since the last retrain?
+    5.  **Persistence Gate**: Did the signal persist across consecutive batches?
+*   **Retraining Data Policy**: Uses a recent rolling window plus a stratified historical anchor.
 
 ---
 
@@ -39,7 +42,7 @@ The brain of the system is contained in two modules that operate independently o
 
 #### **D. Observability & Monitoring**
 *   **Prometheus**: Backend time-series database that scrapes API health and drift metrics.
-*   **Grafana**: Visual dashboard (located in `monitoring/grafana/`) showing the drift timeline and model version history.
+*   **Grafana**: Provisioned dashboard in `monitoring/grafana/` showing prediction volume, latency, model version, drift severity, and retraining events.
 
 ---
 
@@ -48,30 +51,36 @@ The brain of the system is contained in two modules that operate independently o
 #### **E. Experiment Tracking (MLflow)**
 *   **Artifacts**: Every training run logs the model (.pkl), the encoder pipeline, and the training data footprint.
 *   **Metrics**: Accuracy, F1-Score, Precision, Recall, Train Time, and Drift Severity are tracked per batch.
+*   **Deployment**: MLflow is available as a Docker Compose service and through `make mlflow`.
 
 #### **F. CI/CD & Automation**
-*   **Makefile**: Unified entry point for `make train`, `make test`, and `make drift-check`.
-*   **GitHub Actions**: Automated pipeline for linting (`flake8`) and regression testing on every push.
+*   **Makefile**: Unified entry point for testing, ACS training, drift generation, experiments, ablation, MLflow, and Docker stack commands.
+*   **GitHub Actions**: Automated pipeline for linting, regression testing, smoke training, compile checks, Docker Compose validation, and Docker image builds.
 
 ---
 
 ## 3. Data Strategy
-*   **Base Dataset**: UCI Adult Income (Binary Classification).
-*   **Simulated Time-Batches**: 5 sequential batches with controlled perturbations:
-    *   **Shift**: Modifying numerical means (Age).
-    *   **Resample**: Altering categorical distributions (Education).
-    *   **Conditional**: Changing label relationships (Subgroup flipping).
-    *   **Noise**: Simulating sensor failure or feature importance distortion.
+*   **Development Dataset**: UCI Adult Income for lightweight CI and local tests.
+*   **Final Research Dataset**: Folktables ACS Income across 2016, 2017, and 2018.
+*   **Temporal Split**: 2016 is used as baseline training data; 2017-2018 are used as shifted evaluation data.
+*   **Main Drift Design**: Temporal sourcing, covariate shifts, categorical redistribution, and feature-noise shifts.
+*   **Stress-Test Drift Design**: Subgroup label flips are isolated in `configs/drift_config_acs_label_flip_stress.yaml` and used only for noise-ablation diagnostics.
 
 ---
 
 ## 4. Implementation Workflow
 1.  **Baseline**: Model v1 is trained on "clean" data and registered in MLflow.
-2.  **Production Traffic**: API is deployed in Docker.
-3.  **Drift Event**: New batches arrive; `DriftDetector` computes the Batch Severity score.
+2.  **Production Traffic**: API, MLflow, Prometheus, and Grafana are deployed in Docker Compose.
+3.  **Drift Event**: New batches arrive; `DriftDetector` computes feature-level tests and global severity.
 4.  **Policy Decision**: If gates are cleared, `retrain.py` triggers a new MLflow run (Model v2).
 5.  **Hot-Swap**: The API receives a `/reload-model` signal and begins serving v2 immediately.
 6.  **Cycle Complete**: The system updates Grafana to reflect the new performance baseline.
 
+## 5. Final Research Outputs
+
+*   `reports/results_acs.md`: final ACS learnable-drift experiment.
+*   `reports/diagnostics/acs_noise_ablation/`: clean-vs-label-noise ablation.
+*   `reports/diagnostics/acs_regime/`: temporal regime and feature-importance diagnostics.
+*   `paper/ieee_drift_aware_mlops.tex`: final IEEE-format research paper.
+
 ---
-*Created by Antigravity AI Implementation Agent - April 2026*

@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -11,12 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python 3.12
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.12'
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
@@ -46,3 +47,16 @@ jobs:
     - name: Test with pytest
       run: |
         pytest tests/ -v
+
+    - name: Compile source files
+      run: |
+        python -m compileall src api experiments tests paper/make_paper_figures.py
+
+    - name: Validate Docker Compose config
+      run: |
+        docker compose -f docker/docker-compose.yml config
+
+    - name: Build Docker images
+      run: |
+        docker build -f docker/Dockerfile -t drift-aware-mlops-api:ci .
+        docker build -f docker/Dockerfile.mlflow -t drift-aware-mlops-mlflow:ci .

@@ -16,7 +16,7 @@ from src.utils import (
     setup_logging,
 )
 from src.feature_encoding import EncoderPipeline
-from src.train import train_model, save_model
+from src.train import log_mlflow_model_artifacts, train_model, save_model
 from src.evaluate import compute_metrics
 
 logger = setup_logging("retrain", log_file="retrain.log")
@@ -231,8 +231,12 @@ def retrain_model(
                 for key, val in metrics.items():
                     mlflow.log_metric(key, val)
 
-                mlflow.xgboost.log_model(model, "model")
-                mlflow.log_artifact(str(encoder_path))
+                log_mlflow_model_artifacts(
+                    model=model,
+                    input_frame=X_val,
+                    encoder_path=encoder_path,
+                    artifact_path="model",
+                )
                 logger.info(f"Logged retrain {version} to MLflow")
 
         except Exception as e:

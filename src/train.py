@@ -14,6 +14,7 @@ import pandas as pd
 import xgboost as xgb
 import mlflow
 import mlflow.xgboost
+from mlflow.models.signature import infer_signature
 
 from src.utils import (
     load_settings,
@@ -168,6 +169,42 @@ def load_model(filepath: str | Path | None = None) -> xgb.XGBClassifier:
     return model
 
 
+def log_mlflow_model_artifacts(
+    model: xgb.XGBClassifier,
+    input_frame: pd.DataFrame,
+    encoder_path: Path,
+    artifact_path: str = "model",
+) -> None:
+    """
+    Log model and encoder artifacts without failing the whole MLflow run.
+
+    MLflow marks a run as FAILED if an exception escapes the active run context.
+    Artifact logging is useful, but metrics/params should still produce a
+    successful run even if model serialization or artifact upload has an issue.
+    """
+    input_example = input_frame.head(min(5, len(input_frame))).copy()
+    signature = None
+
+    if not input_example.empty:
+        try:
+            signature = infer_signature(input_example, model.predict(input_example))
+        except Exception as e:
+            logger.warning(f"MLflow signature inference skipped: {e}")
+
+    try:
+        kwargs = {"input_example": input_example} if not input_example.empty else {}
+        if signature is not None:
+            kwargs["signature"] = signature
+        mlflow.xgboost.log_model(model, artifact_path, **kwargs)
+    except Exception as e:
+        logger.warning(f"MLflow model artifact logging skipped: {e}")
+
+    try:
+        mlflow.log_artifact(str(encoder_path))
+    except Exception as e:
+        logger.warning(f"MLflow encoder artifact logging skipped: {e}")
+
+
 def run_training_pipeline(
     experiment_name: str | None = None,
     run_name: str = "baseline_training",
@@ -258,11 +295,12 @@ def run_training_pipeline(
                 for key, val in metrics.items():
                     mlflow.log_metric(key, val)
 
-                # Log model artifact
-                mlflow.xgboost.log_model(model, "model")
-
-                # Log encoder as artifact
-                mlflow.log_artifact(str(encoder_path))
+                log_mlflow_model_artifacts(
+                    model=model,
+                    input_frame=X_test,
+                    encoder_path=encoder_path,
+                    artifact_path="model",
+                )
 
                 logger.info(f"MLflow run ID: {run.info.run_id}")
                 logger.info(f"MLflow experiment: {experiment_name}")

@@ -9,6 +9,7 @@ Exposes:
 
 import pandas as pd
 from typing import Any, List
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
@@ -96,10 +97,14 @@ def load_artifacts():
         return False
 
 
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     logger.info("Starting up API...")
     load_artifacts()
+    yield
+
+
+app.router.lifespan_context = lifespan
 
 
 # ── Pydantic Models ─────────────────────────────────────────────────

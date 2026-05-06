@@ -1,23 +1,30 @@
 # Drift-Aware MLOps Pipeline
 
-An end-to-end MLOps system for tabular binary classification that implements **feature-aware drift detection** and **policy-based automated retraining**.
+An end-to-end MLOps and research pipeline for tabular income prediction under dataset shift. The project integrates **MLflow**, **Docker**, **Prometheus**, **Grafana**, **GitHub Actions CI/CD**, FastAPI deployment, drift detection, policy-based retraining, and a multi-year ACS research study.
 
 ## Research Problem
 
-Production ML models degrade when input distributions change over time. This project studies whether a drift-aware retraining policy can preserve predictive performance more efficiently than naive or static retraining.
+Production ML models degrade when input distributions and feature-label relationships change over time. This project studies when adaptive retraining improves over static deployment, and when retraining becomes harmful because incoming labels behave like synthetic noise rather than a learnable new regime.
 
 ## Key Features
 
-- **Two-layer drift detection**: Feature-level (KS test / Chi-square) + global severity score
-- **Policy-based retraining**: Retrain only when severity, data, and cooldown conditions are met
-- **Experiment tracking**: MLflow for parameters, metrics, and model versioning
-- **Monitoring**: Prometheus + Grafana dashboards for drift scores, latency, and retraining events
-- **Containerized deployment**: Docker + FastAPI inference service with model hot-swap
-- **CI/CD**: GitHub Actions (lint/test) + local Makefile (retraining triggers)
+- **Multi-year ACS research pipeline**: 2016 baseline training with 2017-2018 temporal evaluation
+- **Two-layer drift detection**: Feature-level KS/chi-square tests plus global severity scoring
+- **Policy-based retraining**: Persistent-drift, cooldown, sample-count, and rolling-window gates
+- **Experiment tracking**: MLflow logging for baseline and retrained models
+- **Monitoring**: Prometheus metrics and provisioned Grafana dashboards
+- **Containerized deployment**: Docker Compose stack for API, MLflow, Prometheus, and Grafana
+- **CI/CD**: GitHub Actions for linting, tests, artifact smoke checks, and Docker validation
+- **Research diagnostics**: Noise ablation and temporal regime feature-importance analysis
 
 ## Dataset
 
-UCI Adult Income dataset (~48,842 records, 14 features, binary classification).
+The project supports both UCI Adult and Folktables ACS Income. The final research run uses multi-year ACS data:
+
+- 2016 baseline training pool
+- 2017-2018 temporally shifted evaluation pool
+- 12 drift batches under learnable temporal/covariate/feature drift
+- separate label-flip stress-test ablation
 
 ## Quick Start
 
@@ -34,14 +41,39 @@ python -m src.data_processing
 SETTINGS_FILE=configs/settings_acs.yaml python -m src.data_processing
 
 # Train baseline model
-python -m src.train
+SETTINGS_FILE=configs/settings_acs.yaml python -m src.train --run-name acs_baseline
 
 # Run drift simulation
-python -m src.drift_simulation
+SETTINGS_FILE=configs/settings_acs.yaml python -m src.drift_simulation
+
+# Run final ACS experiment
+SETTINGS_FILE=configs/settings_acs.yaml python -m experiments.run_experiments
+
+# Run noise ablation diagnostic
+SETTINGS_FILE=configs/settings_acs.yaml python -m experiments.run_noise_ablation
 
 # Start inference API
 uvicorn api.app:app --host 0.0.0.0 --port 8000
 ```
+
+## Full Local MLOps Stack
+
+```bash
+cd docker
+docker compose up -d --build
+```
+
+Services:
+
+- FastAPI: `http://localhost:8080/docs`
+- MLflow: `http://localhost:5000`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+Grafana default login:
+
+- username: `admin`
+- password: `admin`
 
 ## Project Structure
 
@@ -53,8 +85,9 @@ uvicorn api.app:app --host 0.0.0.0 --port 8000
 ├── monitoring/       # Prometheus + Grafana configs
 ├── tests/            # Test suite
 ├── reports/          # Experiment results and figures
+├── paper/            # IEEE research paper and generated figures
 ├── data/             # Raw, processed, and batch data (gitignored)
-└── mlflow/           # MLflow tracking (gitignored)
+└── mlruns/           # MLflow tracking artifacts (gitignored)
 ```
 
 ## Milestones
@@ -68,8 +101,20 @@ uvicorn api.app:app --host 0.0.0.0 --port 8000
 7. Prometheus & Grafana monitoring
 8. Experimental comparison & report
 
-## ACS Dataset (Programmatic)
+## Requirements Mapping
+
+See [MLOPS_REQUIREMENTS_AUDIT.md](MLOPS_REQUIREMENTS_AUDIT.md) for the full evaluator-facing checklist that maps project requirements to repository evidence.
+
+## Final Research Artifacts
+
+- Paper: `paper/ieee_drift_aware_mlops.tex`
+- Main report: `reports/results_acs.md`
+- Noise ablation: `reports/diagnostics/acs_noise_ablation/`
+- Temporal regime diagnostic: `reports/diagnostics/acs_regime/`
+- Paper figures: `paper/figures/`
+
+## ACS Dataset
 
 - ACS loading uses `folktables` with profile `configs/settings_acs.yaml`.
-- First run downloads ACS data and saves a local snapshot to `data/raw/acs_income_full.csv`.
-- Later runs reuse the snapshot if present (`use_local_snapshot_if_exists: true`).
+- The multi-year run uses `survey_years: [2016, 2017, 2018]`.
+- Data and model artifacts are intentionally gitignored.
